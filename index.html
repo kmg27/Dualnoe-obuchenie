@@ -1,0 +1,1544 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Дуальное обучение: учёт студентов и выпускников</title>
+<style>
+:root{
+  --bg:#EDF0F2;--surface:#FFFFFF;--surface-2:#F4F6F7;--ink:#18232D;--ink-2:#51606D;--ink-3:#7A8794;
+  --line:#D5DCE1;--line-2:#E6EAED;--bar:#22394A;--bar-ink:#E8EEF2;--bar-ink-2:#A3B5C2;
+  --primary:#245E86;--primary-ink:#FFFFFF;--primary-soft:#E2EDF5;--signal:#F0AC00;--signal-ink:#2A1F00;
+  --danger:#B23A2E;--danger-soft:#F8E4E1;--ok:#2E7A4C;--ok-soft:#E0F0E6;--warn:#9A6500;--warn-soft:#FBEFD2;
+  --g5:#2E7A4C;--g4:#6B962F;--g3:#C68700;--g2:#B23A2E;--on-grade:#FFFFFF;
+  --shadow:0 10px 30px rgba(16,30,42,.18);
+  color-scheme:light;
+}
+@media (prefers-color-scheme:dark){
+  :root:not([data-theme="light"]){
+    --bg:#11181E;--surface:#182129;--surface-2:#1E2932;--ink:#E3E9EE;--ink-2:#A3B1BC;--ink-3:#7D8C98;
+    --line:#2D3A45;--line-2:#24303A;--bar:#0F1A22;--bar-ink:#E3E9EE;--bar-ink-2:#8FA2B1;
+    --primary:#5A9FD0;--primary-ink:#06121B;--primary-soft:#1D3242;--signal:#F2B51F;--signal-ink:#231900;
+    --danger:#E87A6C;--danger-soft:#3A1F1C;--ok:#62BA85;--ok-soft:#1B3326;--warn:#E3AD45;--warn-soft:#3A2E14;
+    --g5:#4FAE74;--g4:#93BD52;--g3:#E0A62A;--g2:#E06A5C;--on-grade:#0C1610;
+    --shadow:0 12px 32px rgba(0,0,0,.55);color-scheme:dark;
+  }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink)}
+body{font:14px/1.45 "Segoe UI","PT Sans",system-ui,-apple-system,Roboto,"Helvetica Neue",Arial,sans-serif;font-variant-numeric:tabular-nums;min-height:100vh}
+button,input,select,textarea{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--signal);outline-offset:2px}
+[hidden]{display:none!important}
+
+/* Шапка */
+.appbar{background:var(--bar);color:var(--bar-ink);position:sticky;top:0;z-index:20}
+.appbar-top{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:12px 24px 4px;flex-wrap:wrap}
+.brand{display:flex;align-items:center;gap:12px}
+.brand b{display:block;font-size:17px;font-weight:600}
+.brand span{display:block;font-size:12.5px;color:var(--bar-ink-2)}
+.appbar-tools{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.role{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--bar-ink-2)}
+.role select{background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);color:var(--bar-ink);border-radius:6px;padding:4px 8px;min-height:32px;width:auto}
+.role select option{color:#18232D;background:#fff}
+.iconbtn{background:transparent;border:1px solid transparent;color:inherit;border-radius:6px;width:36px;height:36px;display:inline-grid;place-items:center;cursor:pointer;position:relative;flex:none}
+.appbar .iconbtn:hover{background:rgba(255,255,255,.1)}
+.badge{position:absolute;top:1px;right:-2px;min-width:18px;height:18px;padding:0 5px;border-radius:9px;background:var(--signal);color:var(--signal-ink);font-size:11px;font-weight:700;line-height:18px;text-align:center}
+.user{font-size:13px;text-align:right;line-height:1.25}
+.user small{display:block;color:var(--bar-ink-2);font-size:11.5px}
+.tabs{display:flex;gap:4px;padding:0 14px;overflow-x:auto}
+.tab{background:none;border:0;color:var(--bar-ink-2);padding:10px 12px 11px;cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;font-weight:500}
+.tab:hover{color:var(--bar-ink)}
+.tab[aria-selected="true"]{color:var(--bar-ink);border-bottom-color:var(--signal)}
+
+/* Страница */
+main{padding:20px 24px 56px;max-width:1520px;margin:0 auto}
+.page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:12px 16px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-size:22px;font-weight:600;margin:0}
+h1 .count{font-weight:400;color:var(--ink-3);margin-left:8px;font-size:18px}
+h2{font-size:17px;font-weight:600;margin:0}
+h3{font-size:14.5px;font-weight:600;margin:0 0 10px}
+.sub{color:var(--ink-2);margin:4px 0 0;font-size:13.5px}
+.actions{display:flex;gap:8px;flex-wrap:wrap}
+.btn{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);background:var(--surface);color:var(--ink);padding:7px 13px;border-radius:6px;cursor:pointer;font-weight:500;white-space:nowrap;min-height:34px}
+.btn:hover{border-color:var(--ink-3)}
+.btn.primary{background:var(--primary);border-color:var(--primary);color:var(--primary-ink)}
+.btn.primary:hover{filter:brightness(1.08)}
+.btn.danger{color:var(--danger)}
+.btn.danger:hover{border-color:var(--danger)}
+.btn.danger.solid{background:var(--danger);border-color:var(--danger);color:#fff}
+.btn.small{padding:3px 9px;font-size:12.5px;min-height:28px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:8px}
+.panel + .panel{margin-top:16px}
+
+/* Фильтры */
+.filters{display:flex;flex-wrap:wrap;gap:10px 12px;padding:12px 14px;border-bottom:1px solid var(--line);align-items:flex-end}
+.f{display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--ink-2);min-width:140px;flex:1 1 150px;max-width:230px}
+.f.search{flex:2 1 220px;max-width:320px}
+.f.check{flex-direction:row;align-items:center;gap:8px;min-width:auto;flex:0 0 auto;font-size:13px;color:var(--ink);padding-bottom:7px}
+.f.check input{width:auto;min-height:auto}
+input,select,textarea{background:var(--surface);border:1px solid var(--line);border-radius:6px;padding:6px 9px;min-height:34px;width:100%}
+textarea{min-height:96px;resize:vertical;line-height:1.45}
+input:disabled,select:disabled,textarea:disabled{background:var(--surface-2);color:var(--ink-2);opacity:1}
+input[type=checkbox],input[type=radio]{width:16px;height:16px;min-height:auto;accent-color:var(--primary)}
+
+/* Таблицы */
+.table-wrap{overflow-x:auto}
+table.grid{width:100%;border-collapse:collapse;font-size:13.5px}
+.grid th{text-align:left;font-weight:600;font-size:12.5px;color:var(--ink-2);background:var(--surface-2);padding:9px 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.grid th[data-sort]{cursor:pointer;user-select:none}
+.grid th[data-sort]:hover{color:var(--ink)}
+.grid th .arr{color:var(--primary);margin-left:3px}
+.grid td{padding:9px 10px;border-bottom:1px solid var(--line-2);vertical-align:top}
+.grid tbody tr:last-child td{border-bottom:0}
+.grid tr.row{cursor:pointer}
+.grid tr.row:hover td,.grid tr.row:focus-visible td{background:var(--surface-2)}
+.grid tr.row:focus-visible{outline:2px solid var(--signal);outline-offset:-2px}
+.grid td small{display:block;color:var(--ink-3);font-size:12px}
+.grid td b{font-weight:600}
+.grid td.num,.grid th.num{text-align:right}
+.grid tr.total td{font-weight:600;background:var(--surface-2)}
+.grid tr.sec td{font-weight:600;background:var(--surface-2);color:var(--ink-2)}
+.empty{padding:40px 16px;text-align:center;color:var(--ink-2)}
+.pager{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px;font-size:13px;color:var(--ink-2);flex-wrap:wrap;border-top:1px solid var(--line)}
+.pager .pg{display:flex;gap:6px;align-items:center}
+.pager select{width:auto;min-height:30px;padding:3px 6px}
+
+/* Полоса экзаменов: 4 семестра */
+.track{display:inline-flex;border:1px solid var(--line);border-radius:5px;overflow:hidden;vertical-align:middle}
+.track span{width:25px;height:25px;display:grid;place-items:center;font-weight:700;font-size:13px;border-left:1px solid var(--line)}
+.track span:first-child{border-left:0}
+.g5{background:var(--g5);color:var(--on-grade)}.g4{background:var(--g4);color:var(--on-grade)}
+.g3{background:var(--g3);color:var(--on-grade)}.g2{background:var(--g2);color:var(--on-grade)}
+.g0{color:var(--ink-3);background:repeating-linear-gradient(135deg,transparent 0 4px,var(--line-2) 4px 5px)}
+.gx{color:var(--danger);background:var(--danger-soft)}
+.grade{display:inline-grid;place-items:center;width:26px;height:26px;border-radius:50%;font-weight:700;font-size:13px}
+
+/* Статусы */
+.chip{display:inline-block;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;background:var(--surface-2);color:var(--ink-2);border:1px solid var(--line)}
+.st-train{background:var(--primary-soft);color:var(--primary);border-color:transparent}
+.st-term{background:var(--danger-soft);color:var(--danger);border-color:transparent}
+.st-done{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.st-hired{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.t-hire{background:var(--ok-soft);color:var(--ok);border-color:transparent}
+.t-move,.t-prof{background:var(--primary-soft);color:var(--primary);border-color:transparent}
+.t-rank{background:var(--warn-soft);color:var(--warn);border-color:transparent}
+.t-fire{background:var(--danger-soft);color:var(--danger);border-color:transparent}
+
+/* Ближайшие события */
+.events{border-left:4px solid var(--signal);margin-bottom:16px}
+.events-head{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.ev{display:grid;grid-template-columns:170px minmax(0,1fr) auto;gap:4px 12px;align-items:center;padding:8px 14px;border:0;border-bottom:1px solid var(--line-2);cursor:pointer;background:none;width:100%;text-align:left}
+.ev:hover{background:var(--surface-2)}
+.ev:last-child{border-bottom:0}
+.ev .who{font-weight:600}
+.ev .what{color:var(--ink-2)}
+.ev .when{color:var(--ink-3);font-size:12.5px;white-space:nowrap}
+.k{font-size:12px;font-weight:600;padding:2px 8px;border-radius:4px;justify-self:start;white-space:nowrap}
+.k-overdue,.k-final{background:var(--danger-soft);color:var(--danger)}
+.k-exam{background:var(--warn-soft);color:var(--warn)}
+.k-contract{background:var(--primary-soft);color:var(--primary)}
+.k-1c{background:var(--ok-soft);color:var(--ok)}
+.bell-panel{position:fixed;top:58px;right:16px;width:min(460px,calc(100vw - 32px));max-height:72vh;overflow:auto;z-index:40;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow)}
+.bell-panel .ev{grid-template-columns:minmax(0,1fr) auto}
+.bell-panel .ev .k{grid-column:1/-1}
+
+/* Обмен с 1С */
+.sync-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 14px;border-bottom:1px solid var(--line)}
+.sync-head p{margin:2px 0 0;color:var(--ink-2);font-size:13px}
+
+/* Карточка */
+.scrim{position:fixed;inset:0;background:rgba(10,20,28,.42);z-index:50}
+.drawer{position:fixed;top:0;right:0;bottom:0;width:min(940px,100vw);background:var(--bg);z-index:51;display:flex;flex-direction:column;box-shadow:var(--shadow)}
+.drawer.enter{animation:slide .18s ease-out}
+@keyframes slide{from{transform:translateX(28px);opacity:.5}to{transform:none;opacity:1}}
+@keyframes pop{from{transform:scale(.98);opacity:.6}to{transform:none;opacity:1}}
+@media (prefers-reduced-motion:reduce){.drawer,.modal{animation:none}}
+.d-head{background:var(--surface);padding:16px 20px 12px;display:flex;justify-content:space-between;gap:12px}
+.d-head h2{font-size:21px}
+.d-sub{display:flex;gap:6px 10px;align-items:center;flex-wrap:wrap;color:var(--ink-2);font-size:13px;margin-top:6px}
+.d-actions{display:flex;gap:8px;flex-wrap:wrap;padding:0 20px 12px;background:var(--surface)}
+.d-tabs{display:flex;gap:2px;padding:0 12px;background:var(--surface);border-bottom:1px solid var(--line);overflow-x:auto}
+.d-tab{background:none;border:0;padding:10px 12px;cursor:pointer;color:var(--ink-2);border-bottom:2px solid transparent;white-space:nowrap;font-weight:500}
+.d-tab[aria-selected="true"]{color:var(--ink);border-bottom-color:var(--primary)}
+.d-body{flex:1;overflow:auto;padding:18px 20px 40px}
+.section{background:var(--surface);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:14px}
+.section h3 + .form-grid{margin-top:2px}
+.form-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:12px 14px}
+.form-grid + h3{margin-top:18px}
+.field{display:flex;flex-direction:column;gap:4px;font-size:12.5px;color:var(--ink-2);min-width:0}
+.field.wide{grid-column:1/-1}
+.field.inline{flex-direction:row;align-items:center;gap:8px;color:var(--ink);font-size:13.5px;padding-top:20px}
+.field .req{color:var(--danger)}
+.field.err input,.field.err select,.field.err textarea{border-color:var(--danger)}
+.field .msg{color:var(--danger);font-size:12px}
+.field small{color:var(--ink-3)}
+.hint{font-size:13px;color:var(--ink-2);background:var(--surface-2);border-radius:6px;padding:9px 11px;margin-top:12px}
+.alert{font-size:13.5px;border-radius:6px;padding:10px 12px;margin-bottom:14px;background:var(--danger-soft);color:var(--ink)}
+.alert b{color:var(--danger)}
+.form-foot{display:flex;justify-content:flex-end;gap:8px;margin-top:16px}
+.cascade{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
+.kv{display:grid;grid-template-columns:repeat(auto-fill,minmax(190px,1fr));gap:12px 16px}
+.kv div span{display:block;font-size:12px;color:var(--ink-3)}
+.kv div b{font-weight:600}
+.now{border-left:4px solid var(--ok)}
+.now.fired{border-left-color:var(--danger)}
+.avg{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 4px;font-size:13.5px}
+.avg b{font-size:17px}
+table.exams td{vertical-align:middle}
+table.exams td.field{display:table-cell}
+table.exams input,table.exams select{min-width:120px}
+.timeline{list-style:none;margin:0;padding:0 0 0 16px;border-left:2px solid var(--line)}
+.timeline li{position:relative;padding:0 0 18px 16px}
+.timeline li:last-child{padding-bottom:0}
+.timeline li::before{content:"";position:absolute;left:-24px;top:3px;width:12px;height:12px;border-radius:50%;background:var(--surface);border:2px solid var(--primary)}
+.timeline li.tl-hire::before{border-color:var(--ok)}
+.timeline li.tl-fire::before{border-color:var(--danger)}
+.timeline li.tl-rank::before{border-color:var(--warn)}
+.tl-top{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.tl-date{font-weight:600}
+.tl-place{margin-top:3px}
+.tl-meta{color:var(--ink-2);font-size:12.5px;margin-top:2px}
+
+/* Модальные окна */
+.modal-wrap{position:fixed;inset:0;z-index:60;display:grid;place-items:center;padding:16px;background:rgba(10,20,28,.5)}
+.modal{background:var(--surface);border-radius:10px;width:min(560px,100%);max-height:calc(100vh - 32px);display:flex;flex-direction:column;box-shadow:var(--shadow);animation:pop .14s ease-out}
+.modal.wide{width:min(880px,100%)}
+.modal header{padding:16px 20px 8px;display:flex;justify-content:space-between;align-items:center;gap:10px}
+.m-body{padding:8px 20px 4px;overflow:auto}
+.m-body p{margin:0 0 10px}
+.m-body ul{margin:0 0 10px;padding-left:20px}
+.modal footer{padding:14px 20px 16px;display:flex;justify-content:flex-end;gap:8px;border-top:1px solid var(--line-2);margin-top:12px;flex-wrap:wrap}
+.m-err{color:var(--danger);font-size:13px;margin-right:auto;align-self:center}
+#toasts{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:80;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none;width:max-content;max-width:calc(100vw - 24px)}
+.toast{background:var(--ink);color:var(--bg);padding:9px 16px;border-radius:6px;font-size:13.5px;box-shadow:var(--shadow)}
+
+/* Справочники и отчёты */
+.split{display:grid;grid-template-columns:250px minmax(0,1fr);gap:16px;align-items:start}
+.side{padding:6px}
+.side button{display:block;width:100%;text-align:left;background:none;border:0;padding:9px 12px;border-radius:6px;cursor:pointer;color:var(--ink-2)}
+.side button:hover{color:var(--ink);background:var(--surface-2)}
+.side button[aria-current="true"]{background:var(--primary-soft);color:var(--primary);font-weight:600}
+.side .grp{font-size:12px;color:var(--ink-3);padding:12px 12px 4px}
+.p-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;padding:14px;border-bottom:1px solid var(--line)}
+.note{padding:10px 14px;font-size:13px;color:var(--ink-2);background:var(--surface-2);border-bottom:1px solid var(--line)}
+.off td{color:var(--ink-3)}
+.tree,.tree ul{list-style:none;margin:0;padding:0}
+.tree{padding:8px}
+.tree ul{padding-left:20px;border-left:1px dashed var(--line);margin-left:14px}
+.node{display:flex;align-items:center;gap:10px;padding:6px 8px;border-radius:6px;flex-wrap:wrap}
+.node:hover{background:var(--surface-2)}
+.node .lvl{font-size:12px;color:var(--ink-3)}
+.node.off .nm{color:var(--ink-3);text-decoration:line-through}
+.node .acts{margin-left:auto;display:flex;gap:6px}
+.bar{display:flex;align-items:center;gap:8px;min-width:170px}
+.bar .tr{flex:1;height:8px;background:var(--line-2);border-radius:4px;overflow:hidden;min-width:60px}
+.bar .tr i{display:block;height:100%;background:var(--primary)}
+.bar span{white-space:nowrap;font-size:12.5px}
+.rcount{padding:8px 14px;font-size:12.5px;color:var(--ink-2)}
+.sec-t{padding:14px 14px 0}
+.print-only{display:none}
+
+@media (max-width:900px){.split{grid-template-columns:1fr}}
+@media (max-width:640px){
+  main{padding:14px 12px 48px}
+  .appbar-top{padding:10px 12px 4px}
+  .user{display:none}
+  .ev{grid-template-columns:1fr}
+  .cascade{grid-template-columns:1fr}
+  .f{max-width:none}
+  .d-body{padding:14px 12px 40px}
+}
+@media print{
+  body *{visibility:hidden}
+  .print-area,.print-area *{visibility:visible}
+  .print-area{position:absolute;left:0;top:0;width:100%}
+  .print-only{display:block}
+  .no-print{display:none!important}
+}
+</style>
+</head>
+<body>
+<header class="appbar">
+  <div class="appbar-top">
+    <div class="brand">
+      <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><rect x="1" y="1" width="32" height="32" rx="6" fill="var(--signal)"/><path d="M8 25h6v-6h6v-6h6" stroke="var(--signal-ink)" stroke-width="3" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <div><b>Дуальное обучение</b><span>Учёт студентов и выпускников</span></div>
+    </div>
+    <div class="appbar-tools">
+      <label class="role">Роль (демо)
+        <select id="roleSel">
+          <option value="admin">Администратор</option>
+          <option value="spec">Специалист по обучению</option>
+          <option value="view">Просмотр</option>
+        </select>
+      </label>
+      <button class="iconbtn" id="settingsBtn" data-act="settings" aria-label="Настройки" title="Настройки"></button>
+      <button class="iconbtn" id="bellBtn" data-act="bell" aria-label="Напоминания" title="Напоминания"></button>
+      <div class="user" id="userBox"></div>
+    </div>
+  </div>
+  <nav class="tabs" role="tablist" aria-label="Разделы">
+    <button class="tab" role="tab" data-act="tab" data-tab="students">Студенты на обучении</button>
+    <button class="tab" role="tab" data-act="tab" data-tab="employees">Работники-выпускники</button>
+    <button class="tab" role="tab" data-act="tab" data-tab="dicts">Справочники</button>
+    <button class="tab" role="tab" data-act="tab" data-tab="reports">Отчёты</button>
+  </nav>
+</header>
+<div id="bellPanel" class="bell-panel" hidden></div>
+<main id="main"></main>
+<div id="drawerHost"></div>
+<div id="modalHost"></div>
+<div id="toasts" aria-live="polite"></div>
+<script>
+'use strict';
+/* ===== Утилиты ===== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const pad = (n, l = 2) => String(n).padStart(l, '0');
+const iso = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+const toDate = s => { const [y, m, d] = s.split('-').map(Number); return new Date(y, m - 1, d); };
+const fmt = s => { if (!s) return ''; const [y, m, d] = s.split('-'); return `${d}.${m}.${y}`; };
+const addDays = (s, n) => { const d = toDate(s); d.setDate(d.getDate() + n); return iso(d); };
+const addMonths = (s, n) => { const d = toDate(s); d.setMonth(d.getMonth() + n); return iso(d); };
+const daysBetween = (a, b) => Math.round((toDate(b) - toDate(a)) / 86400000);
+const monthsBetween = (a, b) => { const x = toDate(a), y = toDate(b); return (y.getFullYear() - x.getFullYear()) * 12 + (y.getMonth() - x.getMonth()) - (y.getDate() < x.getDate() ? 1 : 0); };
+const yearOf = s => s ? +s.slice(0, 4) : null;
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const hhmm = () => { const d = new Date(); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const TODAY = iso(new Date());
+const nf = v => typeof v === 'number' ? v.toLocaleString('ru-RU', { maximumFractionDigits: 2 }) : v;
+let uidSeq = 1000;
+const nid = p => p + (++uidSeq);
+const byId = (arr, id) => arr.find(x => x.id === id);
+const plural = (n, a, b, c) => { const m = Math.abs(n) % 100, k = m % 10; return m > 10 && m < 20 ? c : k === 1 ? a : k >= 2 && k <= 4 ? b : c; };
+const dn = n => `${n} ${plural(n, 'день', 'дня', 'дней')}`;
+
+function mulberry32(a) { return function () { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
+const rnd = mulberry32(20261016);
+const ri = (a, b) => a + Math.floor(rnd() * (b - a + 1));
+const pick = arr => arr[Math.floor(rnd() * arr.length)];
+
+const ICON = {
+  bell: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>',
+  gear: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+  x: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M18 6 6 18M6 6l12 12"/></svg>',
+  dl: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/></svg>',
+  plus: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>',
+  sync: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12a9 9 0 0 1-15 6.7L3 16"/><path d="M3 12a9 9 0 0 1 15-6.7L21 8"/><path d="M21 3v5h-5"/><path d="M3 21v-5h5"/></svg>',
+  print: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9V2h12v7"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/><path d="M6 14h12v8H6z"/></svg>'
+};
+
+/* ===== Справочные константы ===== */
+const ST = { TRAIN: 'На обучении', TERM: 'Договор расторгнут', DONE: 'Обучение завершено', NOTH: 'Не принят на работу', HIRED: 'Принят на работу', FIRED: 'Уволен' };
+const ST_CLS = { [ST.TRAIN]: 'st-train', [ST.TERM]: 'st-term', [ST.DONE]: 'st-done', [ST.NOTH]: 'st-noth', [ST.HIRED]: 'st-hired', [ST.FIRED]: 'st-fired' };
+const MT = ['Приём', 'Перевод', 'Повышение разряда', 'Смена профессии', 'Увольнение'];
+const MT_CLS = { 'Приём': 't-hire', 'Перевод': 't-move', 'Повышение разряда': 't-rank', 'Смена профессии': 't-prof', 'Увольнение': 't-fire' };
+const BASIS = ['Отчисление', 'По собственному желанию'];
+const ROLES = {
+  admin: { name: 'Администратор', user: 'Петрова Е. В.' },
+  spec: { name: 'Специалист по обучению', user: 'Сидоров А. Н.' },
+  view: { name: 'Просмотр', user: 'Гусева Л. М.' }
+};
+const GRADE_TXT = { '5': '5 (отлично)', '4': '4 (хорошо)', '3': '3 (удовлетворительно)', '2': '2 (неудовлетворительно)' };
+
+/* ===== База данных (в памяти) ===== */
+const db = {
+  institutions: [
+    { id: 'i1', name: 'ГАПОУ «Политехнический колледж»', short: 'Политехнический колледж', address: 'ул. Заводская, 12', contact: 'Зуева Ирина Петровна', phone: '+7 (812) 410-22-15', active: true },
+    { id: 'i2', name: 'ГБПОУ «Колледж машиностроения и сервиса»', short: 'Колледж машиностроения', address: 'пр. Металлистов, 48', contact: 'Ларионов Денис Олегович', phone: '+7 (812) 430-17-02', active: true },
+    { id: 'i3', name: 'ГАПОУ «Техникум энергетики и сварки»', short: 'Техникум энергетики', address: 'ул. Энергетиков, 5', contact: 'Мельникова Ольга Сергеевна', phone: '+7 (812) 455-61-90', active: true },
+    { id: 'i4', name: 'ГБПОУ «Индустриальный техникум»', short: 'Индустриальный техникум', address: 'ул. Литейная, 21', contact: 'Ковалёв Игорь Юрьевич', phone: '+7 (812) 402-33-48', active: true }
+  ],
+  professions: [
+    { id: 'p1', name: 'Токарь', code: '', active: true },
+    { id: 'p2', name: 'Оператор станков с программным управлением', code: '', active: true },
+    { id: 'p3', name: 'Слесарь механосборочных работ', code: '', active: true },
+    { id: 'p4', name: 'Слесарь-ремонтник', code: '', active: true },
+    { id: 'p5', name: 'Электромонтёр по ремонту и обслуживанию электрооборудования', code: '', active: true },
+    { id: 'p6', name: 'Электрогазосварщик', code: '', active: true },
+    { id: 'p7', name: 'Контролёр станочных и слесарных работ', code: '', active: true }
+  ],
+  positions: [],
+  org: [
+    { id: 'c1', name: 'Цех №1 механообрабатывающий', code: '01', parent: null, active: true },
+    { id: 'c1u1', name: 'Токарный участок', code: '01.1', parent: 'c1', active: true },
+    { id: 'c1u1b1', name: 'Бригада №1', code: '01.1.1', parent: 'c1u1', active: true },
+    { id: 'c1u1b2', name: 'Бригада №2', code: '01.1.2', parent: 'c1u1', active: true },
+    { id: 'c1u2', name: 'Участок станков с ЧПУ', code: '01.2', parent: 'c1', active: true },
+    { id: 'c1u3', name: 'Заготовительный участок', code: '01.3', parent: 'c1', active: false },
+    { id: 'c2', name: 'Цех №2 сборочный', code: '02', parent: null, active: true },
+    { id: 'c2u1', name: 'Участок сборки узлов', code: '02.1', parent: 'c2', active: true },
+    { id: 'c2u1b1', name: 'Бригада №1', code: '02.1.1', parent: 'c2u1', active: true },
+    { id: 'c2u2', name: 'Участок испытаний и контроля', code: '02.2', parent: 'c2', active: true },
+    { id: 'c3', name: 'Цех №3 ремонтно-механический', code: '03', parent: null, active: true },
+    { id: 'c3u1', name: 'Участок ремонта оборудования', code: '03.1', parent: 'c3', active: true },
+    { id: 'c3u1b1', name: 'Бригада №1', code: '03.1.1', parent: 'c3u1', active: true },
+    { id: 'c3u1b2', name: 'Бригада №2', code: '03.1.2', parent: 'c3u1', active: true },
+    { id: 'c3u2', name: 'Электроремонтный участок', code: '03.2', parent: 'c3', active: true },
+    { id: 'c4', name: 'Цех №4 сварочный', code: '04', parent: null, active: true },
+    { id: 'c4u1', name: 'Участок сварки металлоконструкций', code: '04.1', parent: 'c4', active: true },
+    { id: 'c4u1b1', name: 'Бригада №1', code: '04.1.1', parent: 'c4u1', active: true }
+  ],
+  mentors: [
+    { id: 'm1', fio: 'Кравцов Виктор Иванович', tab: '10234', position: 'Токарь 6-го разряда', orgId: 'c1u1', active: true },
+    { id: 'm2', fio: 'Белов Юрий Степанович', tab: '10871', position: 'Токарь 6-го разряда', orgId: 'c1u1', active: true },
+    { id: 'm3', fio: 'Тарасова Наталья Викторовна', tab: '11502', position: 'Наладчик станков с ПУ', orgId: 'c1u2', active: true },
+    { id: 'm4', fio: 'Голубев Олег Петрович', tab: '12044', position: 'Слесарь МСР 6-го разряда', orgId: 'c2u1', active: true },
+    { id: 'm5', fio: 'Филиппов Андрей Валерьевич', tab: '12390', position: 'Контролёр ОТК', orgId: 'c2u2', active: true },
+    { id: 'm6', fio: 'Комаров Сергей Николаевич', tab: '13117', position: 'Слесарь-ремонтник 6-го разряда', orgId: 'c3u1', active: true },
+    { id: 'm7', fio: 'Ершов Игорь Анатольевич', tab: '13265', position: 'Слесарь-ремонтник 5-го разряда', orgId: 'c3u1', active: true },
+    { id: 'm8', fio: 'Медведев Павел Геннадьевич', tab: '13780', position: 'Электромонтёр 6-го разряда', orgId: 'c3u2', active: true },
+    { id: 'm9', fio: 'Шубин Николай Алексеевич', tab: '14052', position: 'Электрогазосварщик 6-го разряда', orgId: 'c4u1', active: true },
+    { id: 'm10', fio: 'Гаврилов Евгений Борисович', tab: '09811', position: 'Токарь 6-го разряда', orgId: 'c1u1', active: false }
+  ],
+  reasons: [
+    { id: 'r1', name: 'По собственному желанию', active: true },
+    { id: 'r2', name: 'Переезд в другой город', active: true },
+    { id: 'r3', name: 'Призыв на военную службу', active: true },
+    { id: 'r4', name: 'Продолжение обучения', active: true },
+    { id: 'r5', name: 'Соглашение сторон', active: true }
+  ],
+  persons: [], audit: [], pending: [], exchange: [],
+  settings: { examDays: 14, contractDays: 30, email: false, mode: 'odata', odataUrl: 'http://1c-srv/zup/odata/standard.odata', folder: '\\\\fileserver\\obmen\\zup', time: '02:00' }
+};
+db.positions = [
+  ...db.professions.map(p => ({ id: 'pos-' + p.id, name: p.name, active: true })),
+  { id: 'pos-br', name: 'Бригадир', active: true },
+  { id: 'pos-ms', name: 'Мастер участка', active: true }
+];
+
+/* ===== Помощники по данным ===== */
+const fio = p => `${p.last} ${p.first} ${p.middle}`.trim();
+const fioShort = s => { const [l, f, m] = s.split(' '); return `${l} ${f ? f[0] + '.' : ''}${m ? ' ' + m[0] + '.' : ''}`; };
+function orgChain(id) { const out = []; let o = byId(db.org, id); while (o) { out.unshift(o); o = o.parent ? byId(db.org, o.parent) : null; } return out; }
+const orgPath = (id, sep = ' / ') => orgChain(id).map(o => o.name).join(sep);
+const orgShort = id => { const ch = orgChain(id); if (!ch.length) return ''; return [ch[0].name.split(' ').slice(0, 2).join(' '), ...ch.slice(1).map(o => o.name)].join(' / '); };
+const orgLevels = id => { const ch = orgChain(id); return [ch[0]?.name || '', ch[1]?.name || '', ch[2]?.name || '']; };
+const workshopOf = id => orgChain(id)[0]?.id || '';
+const LEVEL_NAME = ['Цех', 'Участок', 'Бригада'];
+const instName = (p, full) => { const i = byId(db.institutions, p.contract.instId); return i ? (full ? i.name : i.short) : ''; };
+const profName = p => byId(db.professions, p.contract.profId)?.name || '';
+const nameOf = (list, id) => byId(list, id)?.name || '';
+const mentorName = p => byId(db.mentors, p.placement.mentorId)?.fio || '';
+const startYear = p => yearOf(p.contract.start);
+const sortMoves = p => p.moves.sort((a, b) => a.date.localeCompare(b.date));
+const lastMove = p => p.moves[p.moves.length - 1] || null;
+const hireMove = p => [...p.moves].reverse().find(m => m.type === 'Приём') || null;
+const firstHire = p => p.moves.find(m => m.type === 'Приём') || null;
+const gradYear = p => [ST.DONE, ST.NOTH, ST.HIRED, ST.FIRED].includes(p.status) && p.contract.factEnd ? yearOf(p.contract.factEnd) : null;
+function examAvg(p) { const g = p.exams.filter(e => e.grade).map(e => +e.grade); return g.length ? g.reduce((a, b) => a + b, 0) / g.length : null; }
+const avgNum = p => { const a = examAvg(p); return a == null ? '' : Math.round(a * 100) / 100; };
+function stazh(p) {
+  const h = hireMove(p); if (!h) return '';
+  const lm = lastMove(p); const end = lm.type === 'Увольнение' ? lm.date : TODAY;
+  const m = Math.max(0, monthsBetween(h.date, end)); const y = Math.floor(m / 12), r = m % 12;
+  return y ? `${y} ${plural(y, 'год', 'года', 'лет')}${r ? ' ' + r + ' мес.' : ''}` : `${r} мес.`;
+}
+const statusText = p => p.status === ST.TERM ? `${ST.TERM} ${fmt(p.contract.termDate)}, ${p.contract.termBasis.toLowerCase()}` : p.status;
+function mentorsForOrg(orgId) {
+  if (!orgId) return db.mentors;
+  const chain = orgChain(orgId).map(o => o.id);
+  return db.mentors.filter(m => chain.includes(m.orgId) || orgChain(m.orgId).some(o => o.id === orgId));
+}
+
+/* ===== Демонстрационные данные ===== */
+const LAST = ['Иванов','Смирнов','Кузнецов','Попов','Васильев','Петров','Соколов','Михайлов','Новиков','Фёдоров','Морозов','Волков','Алексеев','Лебедев','Семёнов','Егоров','Павлов','Козлов','Степанов','Николаев','Орлов','Андреев','Макаров','Никитин','Захаров','Зайцев','Соловьёв','Борисов','Яковлев','Григорьев','Романов','Воробьёв','Сергеев','Кузьмин','Фролов','Александров','Дмитриев','Королёв','Гусев','Киселёв'];
+const MF = ['Александр','Дмитрий','Максим','Сергей','Андрей','Алексей','Артём','Илья','Кирилл','Михаил','Никита','Матвей','Роман','Егор','Иван','Денис','Евгений','Тимофей','Владислав','Павел'];
+const FF = ['Анастасия','Мария','Дарья','Анна','Елизавета','Полина','Виктория','Екатерина','Софья','Алина','Ксения','Валерия'];
+const PATR = [['Александрович','Александровна'],['Сергеевич','Сергеевна'],['Андреевич','Андреевна'],['Владимирович','Владимировна'],['Николаевич','Николаевна'],['Игоревич','Игоревна'],['Олегович','Олеговна'],['Викторович','Викторовна'],['Юрьевич','Юрьевна'],['Дмитриевич','Дмитриевна']];
+const GRP = { p1: 'Т', p2: 'ОПУ', p3: 'СМР', p4: 'СР', p5: 'ЭМ', p6: 'СВ', p7: 'К' };
+const PROF_ORG = { p1: ['c1u1b1', 'c1u1b2'], p2: ['c1u2'], p3: ['c2u1b1', 'c2u1'], p4: ['c3u1b1', 'c3u1b2'], p5: ['c3u2'], p6: ['c4u1b1'], p7: ['c2u2'] };
+const TEXTS = [
+  'Дисциплинирован, аккуратно выполняет технологические операции, читает чертежи без ошибок. Рекомендуется к приёму на работу.',
+  'Освоил основные операции, при наладке оборудования нужен контроль. Ответственный и исполнительный.',
+  'Проявляет инициативу, быстро осваивает новое оборудование, помогает другим практикантам. Рекомендуется к приёму на работу.',
+  'На первом году допускал опоздания, к концу обучения показал устойчивый рост. Знание технологии на хорошем уровне.',
+  'Соблюдает требования охраны труда, работает аккуратно, но медленно. Нуждается в дополнительной практике на сложных операциях.'
+];
+let orderSeq = 100;
+const nextOrder = () => `${++orderSeq}-к`;
+
+function seed() {
+  const seq = {};
+  const pendingHire = [];
+  const makeBase = start => {
+    const male = rnd() < .8, ln = pick(LAST), pt = pick(PATR), y = yearOf(start);
+    const prof = pick(['p1','p1','p2','p3','p3','p4','p4','p5','p6','p7']);
+    const inst = ['p5','p6'].includes(prof) ? pick(['i3','i3','i4']) : pick(['i1','i1','i2','i4']);
+    const orgId = pick(PROF_ORG[prof]);
+    let ms = mentorsForOrg(orgId).filter(m => m.active);
+    if (y <= 2021 && orgId.startsWith('c1u1') && rnd() < .5) ms = [byId(db.mentors, 'm10')];
+    seq[y] = (seq[y] || 0) + 1;
+    const cdate = addDays(start, -ri(7, 20));
+    return {
+      id: nid('P'), last: male ? ln : ln + 'а', first: male ? pick(MF) : pick(FF), middle: male ? pt[0] : pt[1],
+      birth: iso(new Date(y - ri(17, 19), ri(0, 11), ri(1, 28))), tab: '',
+      phone: `+7 9${ri(10, 99)} ${ri(100, 999)}-${pad(ri(0, 99))}-${pad(ri(0, 99))}`, email: '', consent: cdate,
+      status: ST.TRAIN, note: '',
+      contract: { num: `ДО-${y}/${pad(seq[y], 3)}`, date: cdate, instId: inst, profId: prof, group: `${GRP[prof]}-${String(y).slice(2)}${ri(1, 2)}`, course: String(ri(2, 3)), start, end: addDays(addMonths(start, 24), -1), factEnd: '', termDate: '', termBasis: '', termComment: '' },
+      placement: { orgId, mentorId: pick(ms.length ? ms : db.mentors.filter(m => m.active)).id },
+      exams: [1, 2, 3, 4].map(k => ({ sem: k, plan: addDays(addMonths(start, 6 * k), -8), fact: '', grade: '', comment: '' })),
+      final: { grade: '', mentorGrade: '', mentorText: '' },
+      diploma: { num: '', date: '', qual: '', honors: false },
+      moves: [], skill: 3.3 + rnd() * 1.7
+    };
+  };
+  const gradeUntil = (p, until) => p.exams.forEach(e => { if (e.plan < until) { e.fact = addDays(e.plan, ri(0, 3)); e.grade = String(clamp(Math.round(p.skill + (rnd() - .5) * 1.3), 3, 5)); } });
+  const finalize = p => {
+    const a = examAvg(p);
+    p.final = { grade: String(clamp(Math.round(a + (rnd() - .5) * .6), 3, 5)), mentorGrade: String(clamp(Math.round(p.skill + (rnd() - .4)), 3, 5)), mentorText: pick(TEXTS) };
+    p.diploma = { num: `${ri(10, 99)}${ri(1000, 9999)} ${pad(ri(1, 9999999), 7)}`, date: addDays(p.contract.end, -ri(60, 70)), qual: `${profName(p)} ${ri(3, 4)}-го разряда`, honors: a >= 4.75 };
+    p.contract.factEnd = p.contract.end;
+  };
+  const terminate = (p, date, basis) => {
+    gradeUntil(p, date);
+    Object.assign(p.contract, { termDate: date, termBasis: basis, factEnd: date, termComment: basis === 'Отчисление' ? 'Академическая задолженность по итогам семестра' : 'Смена места жительства' });
+    p.status = ST.TERM;
+  };
+  const career = (p, hireDate) => {
+    p.tab = String(ri(20000, 59999));
+    let prof = p.contract.profId, org = p.placement.orgId, rank = ri(2, 3), pos = 'pos-' + prof;
+    const mk = (type, date, extra = {}) => ({ id: nid('M'), type, date, orgId: org, posId: pos, profId: prof, rank: String(rank), order: nextOrder(), orderDate: addDays(date, -ri(1, 5)), reasonId: '', source: rnd() < .55 ? '1С:ЗУП' : 'Вручную', comment: '', ...extra });
+    p.moves.push(mk('Приём', hireDate)); p.status = ST.HIRED;
+    let t = hireDate;
+    for (;;) {
+      t = addDays(t, ri(170, 520)); if (t > TODAY) break;
+      const r = rnd();
+      if (r < .15) { p.moves.push(mk('Увольнение', t, { reasonId: pick(db.reasons).id })); p.status = ST.FIRED; break; }
+      if (r < .55 && rank < 6) { rank++; if (rank >= 5 && rnd() < .3) pos = 'pos-br'; p.moves.push(mk('Повышение разряда', t)); continue; }
+      if (r < .82) { org = pick([...new Set(Object.values(PROF_ORG).flat())].filter(x => x !== org)); p.moves.push(mk('Перевод', t)); continue; }
+      prof = pick(db.professions.filter(x => x.id !== prof && x.id !== 'p7')).id; pos = 'pos-' + prof; org = pick(PROF_ORG[prof]); rank = Math.max(2, rank - 1);
+      p.moves.push(mk('Смена профессии', t));
+    }
+  };
+
+  const COH = [['2021-09-01', 6], ['2022-09-01', 7], ['2023-09-01', 7], ['2024-09-01', 7], ['2024-11-01', 3], ['2025-03-01', 3], ['2025-09-01', 7], ['2026-09-01', 6]];
+  for (const [start, n] of COH) {
+    const end = addDays(addMonths(start, 24), -1);
+    for (let i = 0; i < n; i++) {
+      const p = makeBase(start);
+      if (end < TODAY) {
+        if (start === '2024-09-01' && i === 0) { gradeUntil(p, TODAY); }
+        else if (start === '2024-09-01' && i === 1) { gradeUntil(p, TODAY); finalize(p); p.status = ST.DONE; pendingHire.push(p); }
+        else {
+          const r = rnd();
+          if (r < .12) { const t = ri(2, 4); terminate(p, addDays(p.exams[t - 1].plan, -ri(25, 70)), pick(BASIS)); }
+          else {
+            gradeUntil(p, TODAY); finalize(p);
+            const hd = addDays(end, ri(12, 40));
+            if (r < .34) p.status = ST.NOTH; else if (hd <= TODAY) career(p, hd); else p.status = ST.DONE;
+          }
+        }
+      } else {
+        gradeUntil(p, TODAY);
+        if (start === '2025-03-01' && i === 0) { const g = p.exams.filter(e => e.grade); const e = g[g.length - 1]; if (e) { e.grade = ''; e.fact = ''; } }
+        if (start === '2025-09-01' && i === n - 1) { const d = addDays(TODAY, -11); if (d > start) terminate(p, d, 'По собственному желанию'); }
+      }
+      delete p.skill;
+      db.persons.push(p);
+      db.audit.push({ ts: `${p.contract.date} 10:00`, user: 'Первичная загрузка', personId: p.id, entity: 'Карточка', action: 'Создание', details: 'Карточка создана при переносе данных из журналов' });
+    }
+  }
+  for (const p of pendingHire) {
+    const d = addDays(p.contract.end, 35) <= TODAY ? addDays(p.contract.end, 35) : TODAY;
+    db.pending.push({ id: nid('E'), personId: p.id, received: TODAY, move: { type: 'Приём', date: d, orgId: p.placement.orgId, posId: 'pos-' + p.contract.profId, profId: p.contract.profId, rank: '3', order: nextOrder(), orderDate: addDays(d, -2), reasonId: '', comment: '', tab: String(ri(20000, 59999)) } });
+  }
+  const emp = db.persons.find(p => p.status === ST.HIRED && +lastMove(p).rank < 6 && lastMove(p).date < addDays(TODAY, -3));
+  if (emp) { const m = lastMove(emp); db.pending.push({ id: nid('E'), personId: emp.id, received: TODAY, move: { ...m, id: undefined, type: 'Повышение разряда', date: addDays(TODAY, -3), rank: String(+m.rank + 1), order: nextOrder(), orderDate: addDays(TODAY, -4), reasonId: '', comment: '' } }); }
+  db.exchange.push({ ts: `${TODAY} 02:00`, mode: 'OData', got: db.pending.length, pending: db.pending.length, errors: 0, user: 'Планировщик' });
+  db.exchange.push({ ts: `${addDays(TODAY, -1)} 02:00`, mode: 'OData', got: 0, pending: 0, errors: 0, user: 'Планировщик' });
+  db.persons.forEach(sortMoves);
+  db.audit.sort((a, b) => b.ts.localeCompare(a.ts));
+}
+seed();
+
+/* ===== Выгрузка в Excel (.xlsx без внешних библиотек) ===== */
+const XLSX = (() => {
+  const T = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; T[n] = c >>> 0; }
+  const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = T[(c ^ b[i]) & 0xFF] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+  const enc = new TextEncoder();
+  function zip(files) {
+    const parts = [], central = []; let offset = 0;
+    for (const f of files) {
+      const name = enc.encode(f.name), data = enc.encode(f.text), crc = crc32(data);
+      const h = new DataView(new ArrayBuffer(30));
+      h.setUint32(0, 0x04034b50, true); h.setUint16(4, 20, true); h.setUint16(6, 0x0800, true); h.setUint16(8, 0, true);
+      h.setUint16(10, 0, true); h.setUint16(12, 0x21, true); h.setUint32(14, crc, true); h.setUint32(18, data.length, true);
+      h.setUint32(22, data.length, true); h.setUint16(26, name.length, true); h.setUint16(28, 0, true);
+      parts.push(new Uint8Array(h.buffer), name, data);
+      const c = new DataView(new ArrayBuffer(46));
+      c.setUint32(0, 0x02014b50, true); c.setUint16(4, 20, true); c.setUint16(6, 20, true); c.setUint16(8, 0x0800, true); c.setUint16(10, 0, true);
+      c.setUint16(12, 0, true); c.setUint16(14, 0x21, true); c.setUint32(16, crc, true); c.setUint32(20, data.length, true); c.setUint32(24, data.length, true);
+      c.setUint16(28, name.length, true); c.setUint16(30, 0, true); c.setUint16(32, 0, true); c.setUint16(34, 0, true); c.setUint16(36, 0, true);
+      c.setUint32(38, 0, true); c.setUint32(42, offset, true);
+      central.push(new Uint8Array(c.buffer), name);
+      offset += 30 + name.length + data.length;
+    }
+    const size = central.reduce((s, x) => s + x.length, 0);
+    const e = new DataView(new ArrayBuffer(22));
+    e.setUint32(0, 0x06054b50, true); e.setUint16(8, files.length, true); e.setUint16(10, files.length, true); e.setUint32(12, size, true); e.setUint32(16, offset, true);
+    return [...parts, ...central, new Uint8Array(e.buffer)];
+  }
+  const xe = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])).replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '');
+  const col = i => { let s = ''; i++; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; };
+  const cell = (ref, v, s) => {
+    const st = s ? ` s="${s}"` : '';
+    if (v === null || v === undefined || v === '') return s ? `<c r="${ref}"${st}/>` : '';
+    if (typeof v === 'number') return `<c r="${ref}"${st}><v>${v}</v></c>`;
+    return `<c r="${ref}" t="inlineStr"${st}><is><t xml:space="preserve">${xe(v)}</t></is></c>`;
+  };
+  const NS = 'http://schemas.openxmlformats.org';
+  const STYLES = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><styleSheet xmlns="${NS}/spreadsheetml/2006/main"><fonts count="3"><font><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="11"/><name val="Calibri"/></font><font><b/><sz val="14"/><name val="Calibri"/></font></fonts><fills count="3"><fill><patternFill patternType="none"/></fill><fill><patternFill patternType="gray125"/></fill><fill><patternFill patternType="solid"><fgColor rgb="FFE3E8EC"/><bgColor indexed="64"/></patternFill></fill></fills><borders count="2"><border><left/><right/><top/><bottom/><diagonal/></border><border><left style="thin"><color rgb="FFB0BAC2"/></left><right style="thin"><color rgb="FFB0BAC2"/></right><top style="thin"><color rgb="FFB0BAC2"/></top><bottom style="thin"><color rgb="FFB0BAC2"/></bottom><diagonal/></border></borders><cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="8"><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="0" fontId="1" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="center"/></xf><xf numFmtId="0" fontId="0" fillId="0" borderId="1" xfId="0" applyBorder="1" applyAlignment="1"><alignment wrapText="1" vertical="top"/></xf><xf numFmtId="0" fontId="2" fillId="0" borderId="0" xfId="0" applyFont="1"/><xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/><xf numFmtId="9" fontId="0" fillId="0" borderId="1" xfId="0" applyNumberFormat="1" applyBorder="1"/><xf numFmtId="0" fontId="1" fillId="2" borderId="1" xfId="0" applyFont="1" applyFill="1" applyBorder="1"/></cellXfs><cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles></styleSheet>`;
+  function build(r) {
+    const rows = [[{ v: r.title, s: 4 }], ...r.meta.map(m => [{ v: m, s: 5 }]), []];
+    const widths = [];
+    for (const sec of r.sections) {
+      if (sec.title) rows.push([{ v: sec.title, s: 1 }]);
+      rows.push(sec.columns.map(c => ({ v: c.h, s: 2 })));
+      sec.columns.forEach((c, i) => widths[i] = Math.max(widths[i] || 0, c.w || 12));
+      for (const row of sec.rows) {
+        if (row.section) { rows.push([{ v: row.section, s: 1 }]); continue; }
+        rows.push(row.map((v, i) => {
+          const c = sec.columns[i] || {};
+          if (c.type === 'pct') return { v: v == null ? '' : v.pct, s: 6 };
+          return { v: v == null ? '' : v, s: row.total ? 7 : 3 };
+        }));
+      }
+      rows.push([]);
+    }
+    const data = rows.map((r2, ri2) => `<row r="${ri2 + 1}">${r2.map((c, ci) => cell(col(ci) + (ri2 + 1), c.v, c.s)).join('')}</row>`).join('');
+    const cols = widths.length ? `<cols>${widths.map((w, i) => `<col min="${i + 1}" max="${i + 1}" width="${w}" customWidth="1"/>`).join('')}</cols>` : '';
+    return zip([
+      { name: '[Content_Types].xml', text: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="${NS}/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/></Types>` },
+      { name: '_rels/.rels', text: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS}/package/2006/relationships"><Relationship Id="rId1" Type="${NS}/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>` },
+      { name: 'xl/workbook.xml', text: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="${NS}/spreadsheetml/2006/main" xmlns:r="${NS}/officeDocument/2006/relationships"><sheets><sheet name="Отчёт" sheetId="1" r:id="rId1"/></sheets></workbook>` },
+      { name: 'xl/_rels/workbook.xml.rels', text: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="${NS}/package/2006/relationships"><Relationship Id="rId1" Type="${NS}/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/><Relationship Id="rId2" Type="${NS}/officeDocument/2006/relationships/styles" Target="styles.xml"/></Relationships>` },
+      { name: 'xl/styles.xml', text: STYLES },
+      { name: 'xl/worksheets/sheet1.xml', text: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="${NS}/spreadsheetml/2006/main">${cols}<sheetData>${data}</sheetData></worksheet>` }
+    ]);
+  }
+  return { build };
+})();
+
+/* ===== Состояние интерфейса ===== */
+const S = {
+  tab: 'students', role: 'spec', open: null, cardTab: 'general', dict: 'institutions', report: 'journal',
+  f: {
+    students: { q: '', year: '', inst: '', prof: '', shop: '', mentor: '', status: ST.TRAIN, sort: 'fio', dir: 1, page: 1, size: 25 },
+    employees: { q: '', gyear: '', inst: '', shop: '', prof: '', rank: '', status: '', sort: 'fio', dir: 1, page: 1, size: 25 },
+    rj: { q: '', year: '', inst: '', prof: '', shop: '', mentor: '', status: '', chr: false },
+    rm: { mode: 'full', from: '', to: '', shop: '', prof: '', q: '' },
+    rc: { id: '' }, ra: { dim: 'year' }, rr: { n: '3' }, rg: { year: '' }
+  }
+};
+const canEdit = () => S.role !== 'view';
+const isAdmin = () => S.role === 'admin';
+
+function log(personId, entity, action, details) {
+  db.audit.unshift({ ts: `${TODAY} ${hhmm()}`, user: ROLES[S.role].user, personId, entity, action, details });
+}
+function toast(msg) {
+  const el = document.createElement('div'); el.className = 'toast'; el.textContent = msg;
+  const host = $('#toasts'); host.appendChild(el); while (host.children.length > 2) host.firstChild.remove(); setTimeout(() => el.remove(), 3600);
+}
+function download(blobParts, name) {
+  const blob = new Blob(blobParts, { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+function exportReport(r, base) { download(XLSX.build(r), `${base}_${TODAY}.xlsx`); toast(`Файл «${base}_${TODAY}.xlsx» выгружен`); }
+
+/* ===== Элементы форм ===== */
+function options(list, sel, { empty = '— выберите —', label = x => x.name, val = x => x.id } = {}) {
+  return (empty !== null ? `<option value="">${esc(empty)}</option>` : '') +
+    list.map(x => `<option value="${esc(val(x))}"${String(val(x)) === String(sel ?? '') ? ' selected' : ''}>${esc(label(x))}</option>`).join('');
+}
+const activeOr = (list, sel) => list.filter(x => x.active !== false || x.id === sel);
+const gradeOpts = sel => options(['5', '4', '3', '2'].map(g => ({ id: g, name: GRADE_TXT[g] })), sel, { empty: '—' });
+function fld(name, label, { type = 'text', value = '', req = false, opts = '', wide = false, dis = false, attrs = '', hint = '' } = {}) {
+  const d = dis || !canEdit() ? ' disabled' : '';
+  if (type === 'checkbox') return `<label class="field inline${wide ? ' wide' : ''}"><input type="checkbox" name="${name}"${value ? ' checked' : ''}${d}> ${esc(label)}</label>`;
+  let ctl;
+  if (type === 'select') ctl = `<select name="${name}"${d}${attrs}>${opts}</select>`;
+  else if (type === 'textarea') ctl = `<textarea name="${name}"${d}${attrs}>${esc(value)}</textarea>`;
+  else ctl = `<input type="${type}" name="${name}" value="${esc(value)}"${d}${attrs}>`;
+  return `<label class="field${wide ? ' wide' : ''}"><span>${esc(label)}${req ? ' <span class="req">*</span>' : ''}</span>${ctl}${hint ? `<small>${esc(hint)}</small>` : ''}</label>`;
+}
+function cascadeHTML(orgId, dis = false) {
+  const ch = orgId ? orgChain(orgId) : [];
+  const sel = i => ch[i]?.id || '';
+  const d = dis || !canEdit();
+  const level = (i, parent) => {
+    const items = db.org.filter(o => o.parent === parent && (o.active !== false || o.id === sel(i)));
+    const off = d || (i > 0 && !parent);
+    return `<select data-cascade="${i}"${off ? ' disabled' : ''} aria-label="${LEVEL_NAME[i]}">${options(items, sel(i), { empty: i === 2 ? '— без бригады —' : `— ${LEVEL_NAME[i].toLowerCase()} —` })}</select>`;
+  };
+  return level(0, null) + level(1, sel(0)) + level(2, sel(1));
+}
+const cascadeField = (orgId, label = 'Подразделение: цех, участок, бригада', dis = false) =>
+  `<div class="field wide" data-name="orgId"><span>${esc(label)} <span class="req">*</span></span><div class="cascade" data-cascade-root>${cascadeHTML(orgId, dis)}</div></div>`;
+function readCascade(root) { const v = $$('select[data-cascade]', root).map(s => s.value).filter(Boolean); return v[v.length - 1] || ''; }
+const mentorOpts = (orgId, sel) => options(mentorsForOrg(orgId).filter(m => m.active || m.id === sel), sel, { label: m => m.fio + (m.active ? '' : ' (недействующий)') });
+
+function readFields(root) {
+  const v = {};
+  $$('[name]', root).forEach(el => { if (el.type === 'radio') { if (el.checked) v[el.name] = el.value; } else v[el.name] = el.type === 'checkbox' ? el.checked : el.value.trim(); });
+  const c = root.querySelector('[data-cascade-root]'); if (c) v.orgId = readCascade(c);
+  return v;
+}
+function markErrors(root, errs) {
+  $$('.field', root).forEach(f => { f.classList.remove('err'); f.querySelector('.msg')?.remove(); });
+  for (const [name, msg] of Object.entries(errs)) {
+    const el = root.querySelector(`[name="${name}"]`) || root.querySelector(`[data-name="${name}"]`);
+    const f = el?.closest('.field'); if (f) { f.classList.add('err'); f.insertAdjacentHTML('beforeend', `<span class="msg">${esc(msg)}</span>`); }
+  }
+  const n = Object.keys(errs).length;
+  if (n) { const first = root.querySelector('.field.err'); first?.scrollIntoView({ block: 'nearest' }); }
+  return n === 0;
+}
+function requireFields(v, list) { const e = {}; list.forEach(k => { if (!v[k]) e[k] = 'Заполните поле'; }); return e; }
+const disp = v => typeof v === 'boolean' ? (v ? 'да' : 'нет') : /^\d{4}-\d{2}-\d{2}$/.test(v) ? fmt(v) : (v === '' ? 'пусто' : v);
+function applyChanges(obj, vals, labels) {
+  const ch = [];
+  for (const [k, l] of Object.entries(labels)) {
+    const [lab, f] = Array.isArray(l) ? l : [l, x => x];
+    const old = obj[k] ?? '', nv = vals[k] ?? '';
+    if (String(old) !== String(nv)) { ch.push(`${lab}: «${disp(f(old) ?? '')}» → «${disp(f(nv) ?? '')}»`); obj[k] = nv; }
+  }
+  return ch;
+}
+
+/* ===== Напоминания ===== */
+function reminders() {
+  const out = [], ed = +db.settings.examDays, cd = +db.settings.contractDays;
+  for (const p of db.persons) {
+    if (p.status !== ST.TRAIN) continue;
+    for (const e of p.exams) {
+      if (e.grade) continue;
+      const d = daysBetween(TODAY, e.plan);
+      if (d < 0) out.push({ kind: 'overdue', label: 'Просрочен экзамен', p, date: e.plan, text: `Экзамен за ${e.sem}-й семестр: оценки нет уже ${dn(-d)}`, prio: 0 });
+      else if (d <= ed) out.push({ kind: 'exam', label: 'Экзамен', p, date: e.plan, text: `Экзамен за ${e.sem}-й семестр через ${dn(d)}`, prio: 1 });
+    }
+    const dc = daysBetween(TODAY, p.contract.end);
+    if (dc >= 0 && dc <= cd) out.push({ kind: 'contract', label: 'Окончание договора', p, date: p.contract.end, text: `Договор заканчивается через ${dn(dc)}`, prio: 2 });
+    if (dc < 0) out.push({ kind: 'final', label: 'Нет итоговых данных', p, date: p.contract.end, text: 'Договор окончен, а итоговая оценка или диплом не внесены', prio: 0 });
+  }
+  if (db.pending.length) out.push({ kind: '1c', label: '1С:ЗУП', p: null, date: TODAY, text: `Событий из 1С:ЗУП ждут подтверждения: ${db.pending.length}`, prio: 1 });
+  return out.sort((a, b) => a.prio - b.prio || a.date.localeCompare(b.date));
+}
+const evHTML = (r, i) => `<button class="ev" data-act="ev" data-i="${i}"><span class="k k-${r.kind}">${esc(r.label)}</span><span><span class="who">${r.p ? esc(fio(r.p)) : 'Обмен с 1С:ЗУП'}</span> <span class="what">${esc(r.text)}</span></span><span class="when">${fmt(r.date)}</span></button>`;
+
+/* ===== Общая отрисовка ===== */
+function renderAll() { renderHeader(); renderMain(); renderDrawer(); }
+function renderHeader() {
+  $$('.tab').forEach(t => t.setAttribute('aria-selected', String(t.dataset.tab === S.tab)));
+  $('#roleSel').value = S.role;
+  $('#userBox').innerHTML = `${esc(ROLES[S.role].user)}<small>${esc(ROLES[S.role].name)}</small>`;
+  $('#settingsBtn').innerHTML = ICON.gear; $('#settingsBtn').hidden = !isAdmin();
+  const n = canEdit() ? reminders().length : 0;
+  $('#bellBtn').innerHTML = ICON.bell + (n ? `<span class="badge">${n}</span>` : '');
+  $('#bellBtn').hidden = !canEdit();
+  if (!$('#bellPanel').hidden) renderBell();
+}
+function renderBell() {
+  const list = reminders();
+  $('#bellPanel').innerHTML = `<div class="events-head"><h3 style="margin:0">Напоминания</h3><span class="sub" style="margin:0">${list.length}</span></div>` +
+    (list.length ? list.map(evHTML).join('') : '<div class="empty">Ближайших событий нет. Новые напоминания появятся здесь.</div>');
+}
+function renderMain() {
+  const m = $('#main');
+  if (S.tab === 'students') { m.innerHTML = viewStudents(); renderTable('students'); }
+  else if (S.tab === 'employees') { m.innerHTML = viewEmployees(); renderTable('employees'); }
+  else if (S.tab === 'dicts') m.innerHTML = viewDicts();
+  else { m.innerHTML = viewReports(); renderReportBody(); }
+}
+
+/* ===== Фильтры ===== */
+const yearsList = () => [...new Set(db.persons.map(startYear))].sort((a, b) => b - a).map(y => ({ id: String(y), name: String(y) }));
+const gradYears = () => [...new Set(db.persons.map(gradYear).filter(Boolean))].sort((a, b) => b - a).map(y => ({ id: String(y), name: String(y) }));
+const shops = () => db.org.filter(o => !o.parent);
+const statusList = list => list.map(s => ({ id: s, name: s }));
+function fSel(path, label, list, empty = 'Все') { const [sc, k] = path.split('.'); return `<label class="f"><span>${esc(label)}</span><select data-f="${path}">${options(list, S.f[sc][k], { empty })}</select></label>`; }
+function fSearch(path, ph = 'ФИО или табельный номер') { const [sc, k] = path.split('.'); return `<label class="f search"><span>Поиск</span><input type="search" data-f="${path}" value="${esc(S.f[sc][k])}" placeholder="${esc(ph)}"></label>`; }
+function fDate(path, label) { const [sc, k] = path.split('.'); return `<label class="f"><span>${esc(label)}</span><input type="date" data-f="${path}" value="${esc(S.f[sc][k])}"></label>`; }
+const mentorList = () => db.mentors.map(m => ({ id: m.id, name: m.fio }));
+
+/* ===== Вкладка «Студенты на обучении» ===== */
+function viewStudents() {
+  const all = canEdit() ? reminders() : [];
+  const ev = all.filter(r => r.p);
+  return `
+  <div class="page-head"><div><h1>Студенты на обучении<span class="count" id="cnt-students"></span></h1><p class="sub">Трёхсторонние договоры, место практики, наставники и результаты экзаменов</p></div>
+    <div class="actions">${canEdit() ? `<button class="btn primary" data-act="add-student">${ICON.plus} Добавить студента</button>` : ''}<button class="btn" data-act="export-students">${ICON.dl} Выгрузить журнал</button></div></div>
+  ${ev.length ? `<section class="panel events" aria-label="Ближайшие события"><div class="events-head"><h3 style="margin:0">Ближайшие события</h3>${ev.length > 6 ? `<button class="btn small" data-act="bell">Показать все (${ev.length})</button>` : ''}</div>${ev.slice(0, 6).map(r => evHTML(r, all.indexOf(r))).join('')}</section>` : ''}
+  <section class="panel">
+    <div class="filters">
+      ${fSearch('students.q')}
+      ${fSel('students.year', 'Год набора', yearsList())}
+      ${fSel('students.inst', 'Учебное заведение', db.institutions.map(i => ({ id: i.id, name: i.short })))}
+      ${fSel('students.prof', 'Профессия', db.professions)}
+      ${fSel('students.shop', 'Цех практики', shops())}
+      ${fSel('students.mentor', 'Наставник', mentorList())}
+      ${fSel('students.status', 'Статус', statusList(Object.values(ST)))}
+    </div>
+    <div id="tbl-students"></div>
+  </section>`;
+}
+function studentRows(f) {
+  const q = (f.q || '').trim().toLowerCase();
+  const rows = db.persons.filter(p => (!f.status || p.status === f.status) && (!f.year || String(startYear(p)) === f.year) && (!f.inst || p.contract.instId === f.inst) &&
+    (!f.prof || p.contract.profId === f.prof) && (!f.shop || workshopOf(p.placement.orgId) === f.shop) && (!f.mentor || p.placement.mentorId === f.mentor) &&
+    (!q || fio(p).toLowerCase().includes(q) || (p.tab || '').includes(q)));
+  const key = { fio: fio, inst: p => instName(p), prof: profName, start: p => p.contract.start, place: p => orgPath(p.placement.orgId), mentor: mentorName, avg: p => examAvg(p) ?? -1, final: p => +(p.final.grade || -1), status: p => p.status }[f.sort || 'fio'];
+  return rows.sort((a, b) => { const x = key(a), y = key(b); return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'ru')) * (f.dir || 1); });
+}
+function examTrack(p) {
+  return `<span class="track" aria-label="Оценки за семестры">${p.exams.map(e => {
+    const overdue = !e.grade && p.status === ST.TRAIN && e.plan < TODAY;
+    const t = e.grade ? `${e.sem}-й семестр: ${e.grade}, ${fmt(e.fact)}` : overdue ? `${e.sem}-й семестр: просрочен (план ${fmt(e.plan)})` : `${e.sem}-й семестр: план ${fmt(e.plan)}`;
+    return `<span class="${e.grade ? 'g' + e.grade : overdue ? 'gx' : 'g0'}" title="${esc(t)}">${e.grade || (overdue ? '!' : '')}</span>`;
+  }).join('')}</span>`;
+}
+const gradeBadge = g => g ? `<span class="grade g${g}">${g}</span>` : '<span class="sub">—</span>';
+const chip = (txt, cls) => `<span class="chip ${cls || ''}">${esc(txt)}</span>`;
+function th(scope, key, label, cls = '') { const f = S.f[scope]; const a = f.sort === key ? `<span class="arr">${f.dir > 0 ? '▲' : '▼'}</span>` : ''; return `<th data-sort="${scope}.${key}" class="${cls}" aria-sort="${f.sort === key ? (f.dir > 0 ? 'ascending' : 'descending') : 'none'}">${label}${a}</th>`; }
+function pager(scope, total) {
+  const f = S.f[scope], pages = Math.max(1, Math.ceil(total / f.size));
+  if (f.page > pages) f.page = pages;
+  return `<div class="pager"><span>Показано ${total ? (f.page - 1) * f.size + 1 : 0}–${Math.min(total, f.page * f.size)} из ${total}</span>
+    <span class="pg"><label>Строк на странице <select data-f="${scope}.size">${[25, 50, 100].map(n => `<option${n === +f.size ? ' selected' : ''}>${n}</option>`).join('')}</select></label>
+    <button class="btn small" data-act="page" data-scope="${scope}" data-p="${f.page - 1}"${f.page <= 1 ? ' disabled' : ''}>Назад</button>
+    <span>${f.page} / ${pages}</span>
+    <button class="btn small" data-act="page" data-scope="${scope}" data-p="${f.page + 1}"${f.page >= pages ? ' disabled' : ''}>Вперёд</button></span></div>`;
+}
+function renderTable(scope) {
+  const f = S.f[scope]; f.size = +f.size;
+  const rows = scope === 'students' ? studentRows(f) : employeeRows(f);
+  $(`#cnt-${scope}`).textContent = rows.length;
+  const page = rows.slice((f.page - 1) * f.size, f.page * f.size);
+  let html;
+  if (scope === 'students') {
+    html = `<div class="table-wrap"><table class="grid"><thead><tr>${th(scope, 'fio', 'ФИО')}${th(scope, 'inst', 'Учебное заведение')}${th(scope, 'prof', 'Профессия')}${th(scope, 'start', 'Договор')}${th(scope, 'place', 'Место практики')}${th(scope, 'mentor', 'Наставник')}${th(scope, 'avg', 'Экзамены, 1–4 сем.')}${th(scope, 'final', 'Итог')}${th(scope, 'status', 'Статус')}</tr></thead><tbody>
+    ${page.map(p => `<tr class="row" tabindex="0" data-act="open" data-id="${p.id}">
+      <td><b>${esc(fio(p))}</b><small>${fmt(p.birth)}</small></td>
+      <td>${esc(instName(p))}<small>гр. ${esc(p.contract.group)}, ${esc(p.contract.course)} курс</small></td>
+      <td>${esc(profName(p))}</td>
+      <td>${esc(p.contract.num)}<small>${fmt(p.contract.start)} – ${fmt(p.contract.end)}</small></td>
+      <td>${esc(orgShort(p.placement.orgId))}</td>
+      <td>${esc(fioShort(mentorName(p)))}</td>
+      <td>${examTrack(p)}</td>
+      <td>${gradeBadge(p.final.grade)}</td>
+      <td>${chip(p.status, ST_CLS[p.status])}</td></tr>`).join('')}
+    </tbody></table></div>`;
+  } else {
+    html = `<div class="table-wrap"><table class="grid"><thead><tr>${th(scope, 'fio', 'ФИО')}${th(scope, 'inst', 'Учебное заведение')}${th(scope, 'hire', 'Дата приёма')}${th(scope, 'place', 'Текущее место работы')}${th(scope, 'pos', 'Должность')}${th(scope, 'prof', 'Профессия')}${th(scope, 'rank', 'Разряд', 'num')}${th(scope, 'stazh', 'Стаж')}${th(scope, 'status', 'Статус')}</tr></thead><tbody>
+    ${page.map(p => { const m = lastMove(p); const h = hireMove(p); const pend = db.pending.some(e => e.personId === p.id);
+      return `<tr class="row" tabindex="0" data-act="open" data-id="${p.id}" data-tab="work">
+      <td><b>${esc(fio(p))}</b><small>таб. № ${esc(p.tab || '—')}</small></td>
+      <td>${esc(instName(p))}<small>выпуск ${gradYear(p) || '—'}</small></td>
+      <td>${h ? fmt(h.date) : '—'}</td>
+      <td>${m ? esc(orgShort(m.orgId)) : '—'}${m && m.type !== 'Приём' ? `<small>${esc(m.type.toLowerCase())} ${fmt(m.date)}</small>` : ''}</td>
+      <td>${m ? esc(nameOf(db.positions, m.posId)) : ''}</td>
+      <td>${m ? esc(nameOf(db.professions, m.profId)) : ''}</td>
+      <td class="num">${m ? esc(m.rank) : ''}</td>
+      <td>${esc(stazh(p))}</td>
+      <td>${p.status === ST.FIRED ? chip('Уволен') : chip('Работает', 'st-hired')}${pend ? `<small>есть событие из 1С</small>` : ''}</td></tr>`; }).join('')}
+    </tbody></table></div>`;
+  }
+  if (!rows.length) html = `<div class="empty">По выбранным фильтрам никого не найдено. Измените условия поиска${scope === 'students' && S.f.students.status ? ' или выберите статус «Все»' : ''}.</div>`;
+  $(`#tbl-${scope}`).innerHTML = html + (rows.length ? pager(scope, rows.length) : '');
+}
+
+/* ===== Вкладка «Работники-выпускники» ===== */
+function employeeRows(f) {
+  const q = (f.q || '').trim().toLowerCase();
+  const rows = db.persons.filter(p => p.moves.length).filter(p => {
+    const m = lastMove(p);
+    return (!f.gyear || String(gradYear(p)) === f.gyear) && (!f.inst || p.contract.instId === f.inst) && (!f.shop || workshopOf(m.orgId) === f.shop) &&
+      (!f.prof || m.profId === f.prof) && (!f.rank || m.rank === f.rank) && (!f.status || (f.status === 'work' ? p.status !== ST.FIRED : p.status === ST.FIRED)) &&
+      (!q || fio(p).toLowerCase().includes(q) || (p.tab || '').includes(q));
+  });
+  const key = { fio: fio, inst: p => instName(p), hire: p => hireMove(p)?.date || '', place: p => orgPath(lastMove(p).orgId), pos: p => nameOf(db.positions, lastMove(p).posId), prof: p => nameOf(db.professions, lastMove(p).profId), rank: p => +lastMove(p).rank, stazh: p => -(hireMove(p) ? toDate(hireMove(p).date).getTime() : 0), status: p => p.status }[f.sort || 'fio'];
+  return rows.sort((a, b) => { const x = key(a), y = key(b); return (typeof x === 'number' ? x - y : String(x).localeCompare(String(y), 'ru')) * (f.dir || 1); });
+}
+function viewEmployees() {
+  const last = db.exchange[0];
+  const pend = db.pending.map(e => {
+    const p = byId(db.persons, e.personId), m = e.move;
+    return `<tr><td><button class="btn small" style="border:0;padding:0;background:none;text-decoration:underline;color:var(--primary)" data-act="open" data-id="${p.id}" data-tab="work">${esc(fio(p))}</button></td>
+      <td>${chip(m.type, MT_CLS[m.type])}</td><td>${fmt(m.date)}</td><td>${esc(orgShort(m.orgId))}</td>
+      <td>${esc(nameOf(db.positions, m.posId))}<small>${esc(nameOf(db.professions, m.profId))}, ${esc(m.rank)} разряд</small></td>
+      <td>№ ${esc(m.order)}<small>от ${fmt(m.orderDate)}</small></td>
+      <td>${canEdit() ? `<span class="actions" style="flex-wrap:nowrap"><button class="btn small primary" data-act="c1-ok" data-id="${e.id}">Подтвердить</button><button class="btn small" data-act="c1-no" data-id="${e.id}">Отклонить</button></span>` : ''}</td></tr>`;
+  }).join('');
+  return `
+  <div class="page-head"><div><h1>Работники-выпускники<span class="count" id="cnt-employees"></span></h1><p class="sub">Принятые на работу выпускники и их перемещения по подразделениям</p></div>
+    <div class="actions"><button class="btn" data-act="export-moves" data-mode="full">${ICON.dl} Журнал перемещений</button><button class="btn" data-act="export-moves" data-mode="current">${ICON.dl} Текущее положение</button></div></div>
+  <section class="panel" style="margin-bottom:16px">
+    <div class="sync-head"><div><h3 style="margin:0">Обмен с 1С:ЗУП</h3><p>${last ? `Последний обмен: ${fmt(last.ts.slice(0, 10))} в ${last.ts.slice(11)}, получено событий: ${last.got}. ` : ''}Автоматически ежедневно в ${esc(db.settings.time)}.</p></div>
+      ${canEdit() ? `<button class="btn" data-act="sync">${ICON.sync} Синхронизировать сейчас</button>` : ''}</div>
+    ${db.pending.length ? `<div class="table-wrap"><table class="grid"><thead><tr><th>Работник</th><th>Событие</th><th>Дата</th><th>Подразделение</th><th>Должность</th><th>Приказ</th><th></th></tr></thead><tbody>${pend}</tbody></table></div>`
+      : `<div class="empty" style="padding:18px">Все события из 1С:ЗУП обработаны.</div>`}
+  </section>
+  <section class="panel">
+    <div class="filters">
+      ${fSearch('employees.q')}
+      ${fSel('employees.gyear', 'Год выпуска', gradYears())}
+      ${fSel('employees.inst', 'Учебное заведение', db.institutions.map(i => ({ id: i.id, name: i.short })))}
+      ${fSel('employees.shop', 'Текущий цех', shops())}
+      ${fSel('employees.prof', 'Профессия', db.professions)}
+      ${fSel('employees.rank', 'Разряд', ['1','2','3','4','5','6','7','8'].map(r => ({ id: r, name: r })))}
+      ${fSel('employees.status', 'Статус', [{ id: 'work', name: 'Работает' }, { id: 'fired', name: 'Уволен' }])}
+    </div>
+    <div id="tbl-employees"></div>
+  </section>`;
+}
+function sync1c() {
+  const got = [];
+  const pool = db.persons.filter(p => p.status === ST.HIRED && !db.pending.some(e => e.personId === p.id));
+  const k = Math.min(pool.length, ri(1, 3));
+  for (let i = 0; i < k; i++) {
+    const p = pool.splice(Math.floor(rnd() * pool.length), 1)[0], cur = lastMove(p);
+    const type = +cur.rank < 6 && rnd() < .6 ? 'Повышение разряда' : 'Перевод';
+    const mv = { type, date: TODAY, orgId: cur.orgId, posId: cur.posId, profId: cur.profId, rank: cur.rank, order: `${ri(400, 599)}-к`, orderDate: addDays(TODAY, -1), reasonId: '', comment: '' };
+    if (type === 'Повышение разряда') mv.rank = String(+cur.rank + 1); else mv.orgId = pick([...new Set(Object.values(PROF_ORG).flat())].filter(x => x !== cur.orgId));
+    got.push({ id: nid('E'), personId: p.id, received: TODAY, move: mv });
+  }
+  db.pending.push(...got);
+  db.exchange.unshift({ ts: `${TODAY} ${hhmm()}`, mode: db.settings.mode === 'file' ? 'Файл' : 'OData', got: got.length, pending: db.pending.length, errors: 0, user: ROLES[S.role].user });
+  toast(got.length ? `Получено событий из 1С:ЗУП: ${got.length}. Проверьте и подтвердите их.` : 'Новых событий в 1С:ЗУП нет');
+  renderAll();
+}
+function confirm1c(id, ok) {
+  const e = db.pending.find(x => x.id === id); if (!e) return;
+  const p = byId(db.persons, e.personId), m = e.move;
+  db.pending = db.pending.filter(x => x !== e);
+  if (!ok) { log(p.id, 'Обмен с 1С:ЗУП', 'Отклонено', `${m.type} от ${fmt(m.date)}, приказ № ${m.order}`); toast('Событие отклонено и не попадёт в журнал'); renderAll(); return; }
+  if (p.moves.some(x => x.date === m.date && x.type === m.type && x.order === m.order)) { toast('Такое событие уже есть в журнале. Дубль не создан.'); renderAll(); return; }
+  if (m.type === 'Приём' && !p.tab && m.tab) p.tab = m.tab;
+  const { tab, ...rest } = m;
+  p.moves.push({ ...rest, id: nid('M'), source: '1С:ЗУП' }); sortMoves(p);
+  if (m.type === 'Приём') p.status = ST.HIRED;
+  if (m.type === 'Увольнение') p.status = ST.FIRED;
+  log(p.id, 'Журнал перемещений', 'Создание', `${m.type} от ${fmt(m.date)}, приказ № ${m.order} (из 1С:ЗУП, подтверждено)`);
+  toast('Событие подтверждено и добавлено в журнал перемещений');
+  renderAll();
+}
+
+/* ===== Карточка человека ===== */
+const CARD_TABS = [['general', 'Общие данные'], ['contract', 'Договор и практика'], ['exams', 'Экзамены и оценки'], ['diploma', 'Диплом'], ['work', 'Трудовая деятельность'], ['history', 'История изменений']];
+function openCard(id, tab) { S.open = id; S.cardTab = tab || 'general'; $('#bellPanel').hidden = true; renderDrawer(); }
+function renderDrawer() {
+  const host = $('#drawerHost');
+  const p = S.open && byId(db.persons, S.open);
+  if (!p) { host.innerHTML = ''; host.dataset.k = ''; return; }
+  const tabs = CARD_TABS.filter(([k]) => k !== 'work' || p.moves.length || [ST.DONE, ST.NOTH].includes(p.status));
+  if (!tabs.some(([k]) => k === S.cardTab)) S.cardTab = 'general';
+  const scroll = $('.d-body', host)?.scrollTop || 0;
+  const sameTab = host.dataset.k === p.id + S.cardTab;
+  const fresh = !host.querySelector('.drawer');
+  host.dataset.k = p.id + S.cardTab;
+  host.innerHTML = `<div class="scrim" data-act="close-card"></div>
+  <aside class="drawer${fresh ? ' enter' : ''}" role="dialog" aria-modal="true" aria-labelledby="d-title">
+    <div class="d-head"><div><h2 id="d-title">${esc(fio(p))}</h2>
+      <div class="d-sub">${chip(p.status, ST_CLS[p.status])}<span>${esc(profName(p))}</span><span>${esc(instName(p))}</span>${p.tab ? `<span>таб. № ${esc(p.tab)}</span>` : ''}</div></div>
+      <button class="iconbtn" data-act="close-card" aria-label="Закрыть карточку">${ICON.x}</button></div>
+    ${cardActions(p)}
+    <nav class="d-tabs" role="tablist">${tabs.map(([k, l]) => `<button class="d-tab" role="tab" data-act="card-tab" data-k="${k}" aria-selected="${k === S.cardTab}">${l}</button>`).join('')}</nav>
+    <div class="d-body">${{ general: tabGeneral, contract: tabContract, exams: tabExams, diploma: tabDiploma, work: tabWork, history: tabHistory }[S.cardTab](p)}</div>
+  </aside>`;
+  if (sameTab) $('.d-body', host).scrollTop = scroll;
+}
+function cardActions(p) {
+  if (!canEdit()) return '';
+  const b = [];
+  if (p.status === ST.TRAIN) b.push(`<button class="btn primary" data-act="complete">Завершить обучение</button>`, `<button class="btn danger" data-act="terminate">Расторгнуть договор</button>`);
+  if (p.status === ST.DONE) b.push(`<button class="btn primary" data-act="move" data-type="Приём">Принять на работу</button>`, `<button class="btn" data-act="nothire">Не принят на работу</button>`);
+  if (p.status === ST.NOTH) b.push(`<button class="btn" data-act="move" data-type="Приём">Принять на работу</button>`);
+  if (p.status === ST.HIRED) b.push(`<button class="btn primary" data-act="move">Добавить перемещение</button>`, `<button class="btn danger" data-act="move" data-type="Увольнение">Уволить</button>`);
+  if (p.status === ST.FIRED) b.push(`<button class="btn" data-act="move" data-type="Приём">Принять повторно</button>`);
+  if (isAdmin()) b.push(`<button class="btn" data-act="set-status">Изменить статус вручную</button>`);
+  return b.length ? `<div class="d-actions">${b.join('')}</div>` : '';
+}
+const saveBar = k => canEdit() ? `<div class="form-foot"><button class="btn primary" data-act="save" data-k="${k}">Сохранить изменения</button></div>` : '';
+function tabGeneral(p) {
+  return `<div class="section" data-form="general"><h3>Личные данные</h3><div class="form-grid">
+    ${fld('last', 'Фамилия', { value: p.last, req: 1 })}${fld('first', 'Имя', { value: p.first, req: 1 })}${fld('middle', 'Отчество', { value: p.middle })}
+    ${fld('birth', 'Дата рождения', { type: 'date', value: p.birth, req: 1 })}${fld('tab', 'Табельный номер', { value: p.tab, hint: 'Присваивается при приёме или заранее' })}
+    ${fld('consent', 'Согласие на обработку ПДн', { type: 'date', value: p.consent })}</div>
+    <h3>Контакты</h3><div class="form-grid">${fld('phone', 'Телефон', { type: 'tel', value: p.phone })}${fld('email', 'E-mail', { type: 'email', value: p.email })}
+    ${fld('note', 'Примечание', { type: 'textarea', value: p.note, wide: 1 })}</div>${saveBar('general')}</div>`;
+}
+function tabContract(p) {
+  const c = p.contract;
+  return `${p.status === ST.TERM ? `<div class="alert"><b>Договор расторгнут ${fmt(c.termDate)}.</b> Основание: ${esc(c.termBasis.toLowerCase())}.${c.termComment ? ' ' + esc(c.termComment) + '.' : ''}</div>` : ''}
+  <div class="section" data-form="contract"><h3>Трёхсторонний договор</h3><div class="form-grid">
+    ${fld('num', 'Номер договора', { value: c.num, req: 1 })}${fld('date', 'Дата договора', { type: 'date', value: c.date, req: 1 })}
+    ${fld('instId', 'Учебное заведение', { type: 'select', req: 1, opts: options(activeOr(db.institutions, c.instId), c.instId, { label: i => i.short }) })}
+    ${fld('profId', 'Профессия обучения', { type: 'select', req: 1, opts: options(activeOr(db.professions, c.profId), c.profId) })}
+    ${fld('group', 'Группа', { value: c.group, req: 1 })}${fld('course', 'Курс', { type: 'number', value: c.course, req: 1, attrs: ' min="1" max="6"' })}
+    ${fld('start', 'Начало обучения', { type: 'date', value: c.start, req: 1 })}${fld('end', 'Плановое окончание', { type: 'date', value: c.end, req: 1 })}
+    ${c.factEnd ? fld('factEnd', 'Фактическое окончание', { type: 'date', value: c.factEnd, dis: 1 }) : ''}</div>
+    <h3>Место практики и наставник</h3><div class="form-grid">${cascadeField(p.placement.orgId)}
+    ${fld('mentorId', 'Наставник', { type: 'select', req: 1, opts: mentorOpts(p.placement.orgId, p.placement.mentorId), wide: 1 })}</div>
+    <div class="hint">Место практики и наставник в течение обучения не меняются. Исправление ошибки ввода сохраняется в истории изменений.</div>
+    ${saveBar('contract')}</div>`;
+}
+function tabExams(p) {
+  const a = examAvg(p);
+  return `<div class="section" data-form="exams"><h3>Семестровые экзамены</h3>
+  <div class="table-wrap"><table class="grid exams"><thead><tr><th>Семестр</th><th>Плановая дата</th><th>Фактическая дата</th><th>Оценка</th><th>Комментарий</th></tr></thead><tbody>
+  ${p.exams.map(e => { const d = !canEdit() ? ' disabled' : ''; return `<tr><td><b>${e.sem}-й</b></td>
+    <td class="field"><input type="date" name="e${e.sem}_plan" value="${e.plan}"${d} aria-label="Плановая дата, ${e.sem}-й семестр"></td>
+    <td class="field"><input type="date" name="e${e.sem}_fact" value="${e.fact}"${d} aria-label="Фактическая дата, ${e.sem}-й семестр"></td>
+    <td class="field"><select name="e${e.sem}_grade"${d} aria-label="Оценка, ${e.sem}-й семестр">${gradeOpts(e.grade)}</select></td>
+    <td class="field"><input name="e${e.sem}_comment" value="${esc(e.comment)}"${d} aria-label="Комментарий, ${e.sem}-й семестр"></td></tr>`; }).join('')}
+  </tbody></table></div>
+  <div class="avg">Средний балл за экзамены: <b>${a == null ? '—' : nf(Math.round(a * 100) / 100)}</b> <span class="sub" style="margin:0">считается автоматически, справочно</span>
+    ${a != null && canEdit() && !p.final.grade ? `<button class="btn small" data-act="suggest-final" data-v="${Math.round(a)}">Подставить в итоговую оценку: ${Math.round(a)}</button>` : ''}</div>
+  <h3 style="margin-top:16px">Итоги обучения</h3><div class="form-grid">
+    ${fld('fgrade', 'Итоговая оценка за 2 года', { type: 'select', opts: gradeOpts(p.final.grade), hint: 'Вводится вручную' })}
+    ${fld('mgrade', 'Оценка наставника за весь период', { type: 'select', opts: gradeOpts(p.final.mentorGrade) })}
+    ${fld('mtext', 'Характеристика наставника', { type: 'textarea', value: p.final.mentorText, wide: 1 })}</div>
+  ${saveBar('exams')}</div>`;
+}
+function tabDiploma(p) {
+  const d = p.diploma;
+  return `<div class="section" data-form="diploma"><h3>Выпускной диплом учебного заведения</h3><div class="form-grid">
+    ${fld('num', 'Номер диплома', { value: d.num })}${fld('date', 'Дата выдачи', { type: 'date', value: d.date })}
+    ${fld('qual', 'Присвоенная квалификация', { value: d.qual, wide: 1 })}${fld('honors', 'Диплом с отличием', { type: 'checkbox', value: d.honors })}</div>
+    ${p.status === ST.TRAIN && p.contract.end > TODAY ? '<div class="hint">Данные диплома вносятся после выпуска.</div>' : ''}${saveBar('diploma')}</div>`;
+}
+function tabWork(p) {
+  if (!p.moves.length) return `<div class="section empty">Выпускник ещё не принят на работу.${canEdit() ? `<div style="margin-top:12px"><button class="btn primary" data-act="move" data-type="Приём">Принять на работу</button></div>` : ''}</div>`;
+  const m = lastMove(p), fired = p.status === ST.FIRED;
+  return `<div class="section now${fired ? ' fired' : ''}"><h3>${fired ? 'Последнее место работы' : 'Текущее место работы'}</h3><div class="kv">
+    <div class="wide" style="grid-column:1/-1"><span>Подразделение</span><b>${esc(orgPath(m.orgId))}</b></div>
+    <div><span>Должность</span><b>${esc(nameOf(db.positions, m.posId))}</b></div><div><span>Профессия</span><b>${esc(nameOf(db.professions, m.profId))}</b></div>
+    <div><span>Разряд</span><b>${esc(m.rank)}</b></div><div><span>${fired ? 'Дата увольнения' : 'С даты'}</span><b>${fmt(m.date)}</b></div>
+    <div><span>Дата приёма</span><b>${fmt(hireMove(p).date)}</b></div><div><span>Стаж на предприятии</span><b>${esc(stazh(p))}</b></div></div></div>
+  <div class="section"><div style="display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px;flex-wrap:wrap"><h3 style="margin:0">Журнал перемещений</h3>
+    ${canEdit() && p.status === ST.HIRED ? `<button class="btn" data-act="move">${ICON.plus} Добавить перемещение</button>` : ''}</div>
+  <ul class="timeline">${[...p.moves].reverse().map(x => `<li class="tl-${MT_CLS[x.type].slice(2)}"><div class="tl-top"><span class="tl-date">${fmt(x.date)}</span>${chip(x.type, MT_CLS[x.type])}</div>
+    <div class="tl-place">${esc(orgPath(x.orgId))}</div>
+    <div class="tl-meta">${esc(nameOf(db.positions, x.posId))}, ${esc(nameOf(db.professions, x.profId))}, ${esc(x.rank)} разряд</div>
+    <div class="tl-meta">Приказ № ${esc(x.order)} от ${fmt(x.orderDate)}. Источник: ${esc(x.source)}${x.reasonId ? `. Причина: ${esc(nameOf(db.reasons, x.reasonId).toLowerCase())}` : ''}${x.comment ? `. ${esc(x.comment)}` : ''}</div></li>`).join('')}</ul></div>`;
+}
+function tabHistory(p) {
+  const list = db.audit.filter(a => a.personId === p.id);
+  return `<div class="section" style="padding:0"><div class="table-wrap"><table class="grid"><thead><tr><th>Дата и время</th><th>Пользователь</th><th>Раздел</th><th>Действие</th><th>Что изменилось</th></tr></thead><tbody>
+  ${list.map(a => `<tr><td>${fmt(a.ts.slice(0, 10))} ${a.ts.slice(11)}</td><td>${esc(a.user)}</td><td>${esc(a.entity)}</td><td>${esc(a.action)}</td><td>${esc(a.details)}</td></tr>`).join('')}</tbody></table></div></div>`;
+}
+
+/* ===== Сохранение разделов карточки ===== */
+function saveSection(k, root) {
+  const p = byId(db.persons, S.open), v = readFields(root);
+  let errs = {}, ch = [], entity = '';
+  if (k === 'general') {
+    errs = requireFields(v, ['last', 'first', 'birth']);
+    if (v.tab && db.persons.some(x => x !== p && x.tab === v.tab)) errs.tab = 'Такой табельный номер уже есть у другого человека';
+    if (v.email && !/^\S+@\S+\.\S+$/.test(v.email)) errs.email = 'Проверьте формат адреса';
+    if (!markErrors(root, errs)) return;
+    entity = 'Общие данные';
+    ch = applyChanges(p, v, { last: 'Фамилия', first: 'Имя', middle: 'Отчество', birth: 'Дата рождения', tab: 'Табельный номер', consent: 'Согласие на обработку ПДн', phone: 'Телефон', email: 'E-mail', note: 'Примечание' });
+  }
+  if (k === 'contract') {
+    errs = requireFields(v, ['num', 'date', 'instId', 'profId', 'group', 'course', 'start', 'end', 'mentorId']);
+    if (!v.orgId || orgChain(v.orgId).length < 2) errs.orgId = 'Выберите как минимум цех и участок';
+    if (v.start && v.end && v.end <= v.start) errs.end = 'Окончание должно быть позже начала';
+    if (v.course && (+v.course < 1 || +v.course > 6)) errs.course = 'Курс от 1 до 6';
+    if (!markErrors(root, errs)) return;
+    entity = 'Договор и практика';
+    ch = applyChanges(p.contract, v, { num: 'Номер договора', date: 'Дата договора', instId: ['Учебное заведение', x => nameOf(db.institutions, x)], profId: ['Профессия', x => nameOf(db.professions, x)], group: 'Группа', course: 'Курс', start: 'Начало', end: 'Плановое окончание' })
+      .concat(applyChanges(p.placement, v, { orgId: ['Место практики', x => orgPath(x)], mentorId: ['Наставник', x => byId(db.mentors, x)?.fio] }));
+  }
+  if (k === 'exams') {
+    for (const e of p.exams) {
+      if (!v[`e${e.sem}_plan`]) errs[`e${e.sem}_plan`] = 'Укажите дату';
+      if (v[`e${e.sem}_grade`] && !v[`e${e.sem}_fact`]) errs[`e${e.sem}_fact`] = 'Укажите дату экзамена';
+      if (v[`e${e.sem}_fact`] > TODAY) errs[`e${e.sem}_fact`] = 'Дата ещё не наступила';
+    }
+    if (!markErrors(root, errs)) return;
+    entity = 'Экзамены и оценки';
+    for (const e of p.exams) ch.push(...applyChanges(e, { plan: v[`e${e.sem}_plan`], fact: v[`e${e.sem}_fact`], grade: v[`e${e.sem}_grade`], comment: v[`e${e.sem}_comment`] },
+      { plan: `${e.sem} сем., плановая дата`, fact: `${e.sem} сем., дата экзамена`, grade: `${e.sem} сем., оценка`, comment: `${e.sem} сем., комментарий` }));
+    ch.push(...applyChanges(p.final, { grade: v.fgrade, mentorGrade: v.mgrade, mentorText: v.mtext }, { grade: 'Итоговая оценка', mentorGrade: 'Оценка наставника', mentorText: 'Характеристика наставника' }));
+  }
+  if (k === 'diploma') {
+    if (v.date && v.date > TODAY) errs.date = 'Дата ещё не наступила';
+    if ((v.num || v.date || v.qual) && !(v.num && v.date && v.qual)) { if (!v.num) errs.num = 'Заполните поле'; if (!v.date) errs.date = 'Заполните поле'; if (!v.qual) errs.qual = 'Заполните поле'; }
+    if (!markErrors(root, errs)) return;
+    entity = 'Диплом';
+    ch = applyChanges(p.diploma, v, { num: 'Номер', date: 'Дата выдачи', qual: 'Квалификация', honors: 'С отличием' });
+  }
+  if (!ch.length) { toast('Изменений нет'); return; }
+  log(p.id, entity, 'Изменение', ch.join('; '));
+  toast('Изменения сохранены');
+  renderAll();
+}
+
+/* ===== Модальные окна ===== */
+let modalCtx = null;
+function openModal({ title, body, ok = 'Сохранить', cancel = 'Отмена', onOk, wide = false, danger = false, noOk = false }) {
+  modalCtx = { onOk };
+  $('#modalHost').innerHTML = `<div class="modal-wrap" data-act="modal-bg"><div class="modal${wide ? ' wide' : ''}" role="dialog" aria-modal="true" aria-labelledby="m-title">
+    <header><h2 id="m-title">${esc(title)}</h2><button class="iconbtn" data-act="modal-close" aria-label="Закрыть">${ICON.x}</button></header>
+    <div class="m-body">${body}</div>
+    <footer><span class="m-err" id="m-err"></span><button class="btn" data-act="modal-close">${esc(cancel)}</button>${noOk ? '' : `<button class="btn ${danger ? 'danger solid' : 'primary'}" data-act="modal-ok">${esc(ok)}</button>`}</footer></div></div>`;
+  setTimeout(() => $('#modalHost .m-body input:not([type=checkbox]), #modalHost .m-body select, #modalHost .m-body textarea')?.focus(), 30);
+}
+function closeModal() { $('#modalHost').innerHTML = ''; modalCtx = null; }
+
+function personFormBody(start = '') {
+  return `<h3>Личные данные</h3><div class="form-grid">
+    ${fld('last', 'Фамилия', { req: 1 })}${fld('first', 'Имя', { req: 1 })}${fld('middle', 'Отчество')}
+    ${fld('birth', 'Дата рождения', { type: 'date', req: 1 })}${fld('phone', 'Телефон', { type: 'tel' })}${fld('email', 'E-mail', { type: 'email' })}
+    ${fld('consent', 'Согласие на обработку ПДн', { type: 'date', value: TODAY })}${fld('tab', 'Табельный номер')}</div>
+  <h3>Трёхсторонний договор</h3><div class="form-grid">
+    ${fld('num', 'Номер договора', { req: 1 })}${fld('date', 'Дата договора', { type: 'date', req: 1, value: TODAY })}
+    ${fld('instId', 'Учебное заведение', { type: 'select', req: 1, opts: options(activeOr(db.institutions), '', { label: i => i.short }) })}
+    ${fld('profId', 'Профессия обучения', { type: 'select', req: 1, opts: options(activeOr(db.professions), '') })}
+    ${fld('group', 'Группа', { req: 1 })}${fld('course', 'Курс', { type: 'number', req: 1, value: '2', attrs: ' min="1" max="6"' })}
+    ${fld('start', 'Начало обучения', { type: 'date', req: 1, value: start })}${fld('end', 'Плановое окончание', { type: 'date', req: 1, value: start ? addDays(addMonths(start, 24), -1) : '', hint: 'По умолчанию начало + 2 года' })}</div>
+  <h3>Место практики и наставник</h3><div class="form-grid">${cascadeField('')}${fld('mentorId', 'Наставник', { type: 'select', req: 1, opts: mentorOpts('', ''), wide: 1 })}</div>
+  <div class="hint">Для договора автоматически создаются 4 семестровых экзамена с плановыми датами в конце каждого полугодия.</div>`;
+}
+function addStudent() {
+  openModal({ title: 'Новый студент', wide: true, ok: 'Добавить студента', body: personFormBody(), onOk: root => {
+    const v = readFields(root);
+    const errs = requireFields(v, ['last', 'first', 'birth', 'num', 'date', 'instId', 'profId', 'group', 'course', 'start', 'end', 'mentorId']);
+    if (!v.orgId || orgChain(v.orgId).length < 2) errs.orgId = 'Выберите как минимум цех и участок';
+    if (v.start && v.end && v.end <= v.start) errs.end = 'Окончание должно быть позже начала';
+    if (v.tab && db.persons.some(x => x.tab === v.tab)) errs.tab = 'Такой табельный номер уже есть';
+    if (db.persons.some(x => x.last.toLowerCase() === v.last.toLowerCase() && x.first.toLowerCase() === v.first.toLowerCase() && x.birth === v.birth)) errs.last = 'Человек с такими ФИО и датой рождения уже есть в системе';
+    if (!markErrors(root, errs)) { $('#m-err').textContent = 'Проверьте отмеченные поля'; return false; }
+    const p = { id: nid('P'), last: v.last, first: v.first, middle: v.middle, birth: v.birth, tab: v.tab, phone: v.phone, email: v.email, consent: v.consent, status: ST.TRAIN, note: '',
+      contract: { num: v.num, date: v.date, instId: v.instId, profId: v.profId, group: v.group, course: v.course, start: v.start, end: v.end, factEnd: '', termDate: '', termBasis: '', termComment: '' },
+      placement: { orgId: v.orgId, mentorId: v.mentorId },
+      exams: [1, 2, 3, 4].map(k => ({ sem: k, plan: addDays(addMonths(v.start, 6 * k), -8), fact: '', grade: '', comment: '' })),
+      final: { grade: '', mentorGrade: '', mentorText: '' }, diploma: { num: '', date: '', qual: '', honors: false }, moves: [] };
+    db.persons.push(p);
+    log(p.id, 'Карточка', 'Создание', `Договор № ${v.num} от ${fmt(v.date)}, ${nameOf(db.professions, v.profId)}`);
+    toast('Студент добавлен');
+    S.f.students.status = ST.TRAIN; renderAll(); openCard(p.id, 'general');
+  } });
+}
+function terminateModal(p) {
+  openModal({ title: 'Расторжение договора', danger: true, ok: 'Расторгнуть договор', body: `<p>${esc(fio(p))}, договор № ${esc(p.contract.num)}.</p><div class="form-grid">
+    ${fld('date', 'Дата расторжения', { type: 'date', req: 1, value: TODAY })}
+    ${fld('basis', 'Основание', { type: 'select', req: 1, opts: options(BASIS.map(b => ({ id: b, name: b })), '') })}
+    ${fld('comment', 'Комментарий', { type: 'textarea', wide: 1 })}</div>`, onOk: root => {
+      const v = readFields(root), errs = requireFields(v, ['date', 'basis']);
+      if (v.date && v.date < p.contract.start) errs.date = 'Дата раньше начала обучения';
+      if (!markErrors(root, errs)) return false;
+      Object.assign(p.contract, { termDate: v.date, termBasis: v.basis, termComment: v.comment, factEnd: v.date }); p.status = ST.TERM;
+      log(p.id, 'Договор и практика', 'Расторжение', `${fmt(v.date)}, основание: ${v.basis}${v.comment ? '. ' + v.comment : ''}`);
+      toast('Договор расторгнут'); renderAll();
+    } });
+}
+function completeModal(p) {
+  const miss = [];
+  p.exams.forEach(e => { if (!e.grade) miss.push(`оценка за ${e.sem}-й семестр`); });
+  if (!p.final.grade) miss.push('итоговая оценка за 2 года');
+  if (!p.final.mentorGrade) miss.push('оценка наставника');
+  if (!p.diploma.num || !p.diploma.date || !p.diploma.qual) miss.push('данные диплома');
+  if (miss.length) { openModal({ title: 'Обучение пока нельзя завершить', noOk: true, cancel: 'Понятно', body: `<p>Внесите в карточку:</p><ul>${miss.map(m => `<li>${esc(m)}</li>`).join('')}</ul><p class="sub">Оценки вносятся на вкладке «Экзамены и оценки», диплом на вкладке «Диплом».</p>` }); return; }
+  openModal({ title: 'Завершить обучение', ok: 'Завершить обучение', body: `<p>${esc(fio(p))}: итоговая оценка ${p.final.grade}, диплом № ${esc(p.diploma.num)}.</p><p>Статус изменится на «${ST.DONE}». Затем выпускника можно принять на работу.</p>`, onOk: () => {
+    p.contract.factEnd = p.contract.end <= TODAY ? p.contract.end : TODAY; p.status = ST.DONE;
+    log(p.id, 'Карточка', 'Смена статуса', `${ST.TRAIN} → ${ST.DONE}`); toast('Обучение завершено'); renderAll();
+  } });
+}
+function notHiredModal(p) {
+  openModal({ title: 'Не принят на работу', ok: 'Отметить', body: `<p>${esc(fio(p))} будет отмечен как выпускник, не принятый на работу. Принять его позже всё равно можно.</p>${fld('comment', 'Комментарий', { type: 'textarea' })}`, onOk: root => {
+    const v = readFields(root); p.status = ST.NOTH; if (v.comment) p.note = (p.note ? p.note + '\n' : '') + v.comment;
+    log(p.id, 'Карточка', 'Смена статуса', `${ST.DONE} → ${ST.NOTH}${v.comment ? '. ' + v.comment : ''}`); toast('Статус изменён'); renderAll();
+  } });
+}
+function statusModal(p) {
+  openModal({ title: 'Ручная корректировка статуса', ok: 'Изменить статус', body: `<p>Используйте только для исправления ошибок. Изменение попадёт в журнал аудита.</p><div class="form-grid">
+    ${fld('status', 'Новый статус', { type: 'select', req: 1, opts: options(statusList(Object.values(ST)), p.status, { empty: null }) })}${fld('comment', 'Причина корректировки', { type: 'textarea', req: 1, wide: 1 })}</div>`, onOk: root => {
+      const v = readFields(root), errs = requireFields(v, ['comment']);
+      if (v.status === p.status) errs.status = 'Выберите другой статус';
+      if (!markErrors(root, errs)) return false;
+      log(p.id, 'Карточка', 'Ручная корректировка статуса', `${p.status} → ${v.status}. ${v.comment}`); p.status = v.status; toast('Статус изменён'); renderAll();
+    } });
+}
+function moveModal(p, preset) {
+  const cur = lastMove(p);
+  const employed = p.status === ST.HIRED;
+  const types = preset ? [preset] : MT.filter(t => employed ? !['Приём', 'Увольнение'].includes(t) : t === 'Приём');
+  const type = preset || types[0];
+  const base = cur && type !== 'Приём' ? cur : { orgId: p.placement.orgId, posId: 'pos-' + p.contract.profId, profId: p.contract.profId, rank: cur?.rank || '3' };
+  openModal({ title: type === 'Приём' ? 'Приём на работу' : type === 'Увольнение' ? 'Увольнение' : 'Новое перемещение', wide: true, danger: type === 'Увольнение', ok: type === 'Увольнение' ? 'Уволить' : 'Добавить в журнал',
+    body: `<p>${esc(fio(p))}${cur ? `. Сейчас: ${esc(orgShort(cur.orgId))}, ${esc(nameOf(db.positions, cur.posId))}, ${esc(cur.rank)} разряд` : ''}.</p>
+    <div class="form-grid">
+      ${fld('type', 'Вид события', { type: 'select', req: 1, opts: options(types.map(t => ({ id: t, name: t })), type, { empty: null }), dis: types.length === 1 })}
+      ${fld('date', 'Дата события', { type: 'date', req: 1, value: TODAY })}
+      ${!p.tab && type === 'Приём' ? fld('tab', 'Табельный номер', { req: 1 }) : ''}
+      ${cascadeField(base.orgId, 'Подразделение: цех, участок, бригада', type === 'Увольнение')}
+      ${fld('posId', 'Должность', { type: 'select', req: 1, opts: options(activeOr(db.positions, base.posId), base.posId), dis: type === 'Увольнение' })}
+      ${fld('profId', 'Профессия', { type: 'select', req: 1, opts: options(activeOr(db.professions, base.profId), base.profId), dis: type === 'Увольнение' })}
+      ${fld('rank', 'Разряд', { type: 'select', req: 1, opts: options('12345678'.split('').map(r => ({ id: r, name: r })), base.rank, { empty: null }), dis: type === 'Увольнение' })}
+      ${fld('order', 'Номер приказа', { req: 1 })}${fld('orderDate', 'Дата приказа', { type: 'date', req: 1, value: TODAY })}
+      ${type === 'Увольнение' ? fld('reasonId', 'Причина увольнения', { type: 'select', req: 1, opts: options(activeOr(db.reasons), '') }) : ''}
+      ${fld('comment', 'Комментарий', { type: 'textarea', wide: 1 })}</div>
+    <div class="hint">${type === 'Увольнение' ? 'Подразделение и должность берутся из последней записи журнала.' : 'Поля заполнены по последней записи. Измените только то, что поменялось.'}</div>`,
+    onOk: root => {
+      const v = readFields(root); const T = v.type || type;
+      if (T === 'Увольнение') Object.assign(v, { orgId: cur.orgId, posId: cur.posId, profId: cur.profId, rank: cur.rank });
+      const errs = requireFields(v, ['date', 'posId', 'profId', 'rank', 'order', 'orderDate']);
+      if (!v.orgId || orgChain(v.orgId).length < 2) errs.orgId = 'Выберите как минимум цех и участок';
+      if (cur && v.date && v.date < cur.date) errs.date = `Дата не может быть раньше последней записи (${fmt(cur.date)})`;
+      if (T === 'Приём' && v.date && v.date < p.contract.start) errs.date = 'Дата раньше начала обучения';
+      if (T === 'Увольнение' && !v.reasonId) errs.reasonId = 'Выберите причину';
+      if (T === 'Приём' && !p.tab) { if (!v.tab) errs.tab = 'Заполните поле'; else if (db.persons.some(x => x.tab === v.tab)) errs.tab = 'Такой табельный номер уже есть'; }
+      if (T === 'Повышение разряда' && cur && +v.rank <= +cur.rank) errs.rank = `Новый разряд должен быть выше текущего (${cur.rank})`;
+      if (T === 'Перевод' && cur && v.orgId === cur.orgId) errs.orgId = 'Выберите другое подразделение';
+      if (T === 'Смена профессии' && cur && v.profId === cur.profId) errs.profId = 'Выберите другую профессию';
+      if (!markErrors(root, errs)) { $('#m-err').textContent = 'Проверьте отмеченные поля'; return false; }
+      if (T === 'Приём' && !p.tab) p.tab = v.tab;
+      const m = { id: nid('M'), type: T, date: v.date, orgId: v.orgId, posId: v.posId, profId: v.profId, rank: v.rank, order: v.order, orderDate: v.orderDate, reasonId: v.reasonId || '', source: 'Вручную', comment: v.comment };
+      p.moves.push(m); sortMoves(p);
+      if (T === 'Приём') p.status = ST.HIRED;
+      if (T === 'Увольнение') p.status = ST.FIRED;
+      log(p.id, 'Журнал перемещений', 'Создание', `${T} от ${fmt(v.date)}: ${orgPath(v.orgId)}, ${nameOf(db.positions, v.posId)}, ${v.rank} разряд, приказ № ${v.order}`);
+      toast(T === 'Приём' ? 'Выпускник принят на работу' : T === 'Увольнение' ? 'Увольнение оформлено' : 'Перемещение добавлено, текущее место работы обновлено');
+      S.cardTab = 'work'; renderAll();
+    } });
+}
+
+/* ===== Справочники ===== */
+const DICTS = {
+  institutions: { title: 'Учебные заведения', list: () => db.institutions, fields: [['name', 'Полное наименование', 1], ['short', 'Краткое наименование', 1], ['address', 'Адрес'], ['contact', 'Контактное лицо'], ['phone', 'Телефон']], cols: ['short', 'name', 'contact', 'phone'],
+    usage: id => db.persons.filter(p => p.contract.instId === id).length },
+  professions: { title: 'Профессии', list: () => db.professions, fields: [['name', 'Наименование', 1], ['code', 'Код']], cols: ['name', 'code'],
+    usage: id => db.persons.filter(p => p.contract.profId === id || p.moves.some(m => m.profId === id)).length },
+  positions: { title: 'Должности', list: () => db.positions, fields: [['name', 'Наименование', 1]], cols: ['name'],
+    usage: id => db.persons.filter(p => p.moves.some(m => m.posId === id)).length },
+  org: { title: 'Структура предприятия' },
+  mentors: { title: 'Наставники', list: () => db.mentors, fields: [['fio', 'ФИО', 1], ['tab', 'Табельный номер'], ['position', 'Должность'], ['orgId', 'Цех / участок', 1, 'org']], cols: ['fio', 'tab', 'position', 'orgId'],
+    usage: id => db.persons.filter(p => p.placement.mentorId === id).length },
+  reasons: { title: 'Причины увольнения', list: () => db.reasons, fields: [['name', 'Наименование', 1]], cols: ['name'],
+    usage: id => db.persons.filter(p => p.moves.some(m => m.reasonId === id)).length }
+};
+const FIELD_LABEL = k => Object.values(DICTS).flatMap(d => d.fields || []).find(f => f[0] === k)?.[1] || k;
+function viewDicts() {
+  const d = DICTS[S.dict];
+  const side = Object.entries(DICTS).map(([k, x]) => `<button data-act="dict" data-k="${k}" aria-current="${k === S.dict}">${x.title}</button>`).join('');
+  let body;
+  if (S.dict === 'org') body = `<ul class="tree">${orgTree(null)}</ul>`;
+  else {
+    const rows = d.list();
+    body = `<div class="table-wrap"><table class="grid"><thead><tr>${d.cols.map(c => `<th>${esc(FIELD_LABEL(c))}</th>`).join('')}<th class="num">Используется</th><th>Состояние</th>${isAdmin() ? '<th></th>' : ''}</tr></thead><tbody>
+    ${rows.map(x => `<tr class="${x.active === false ? 'off' : ''}">${d.cols.map(c => `<td>${esc(c === 'orgId' ? orgShort(x[c]) : x[c])}</td>`).join('')}<td class="num">${d.usage(x.id)}</td><td>${x.active === false ? 'Недействующая' : 'Действует'}</td>
+      ${isAdmin() ? `<td><span class="actions"><button class="btn small" data-act="dict-edit" data-id="${x.id}">Изменить</button><button class="btn small" data-act="dict-toggle" data-id="${x.id}">${x.active === false ? 'Восстановить' : 'Сделать недействующей'}</button></span></td>` : ''}</tr>`).join('')}
+    </tbody></table></div>`;
+  }
+  return `<div class="page-head"><div><h1>Справочники</h1><p class="sub">Записи, на которые есть ссылки, не удаляются, а помечаются недействующими</p></div></div>
+  <div class="split"><nav class="panel side" aria-label="Справочники">${side}</nav>
+  <section class="panel"><div class="p-head"><h2>${d.title}</h2>${isAdmin() ? (S.dict === 'org' ? `<button class="btn primary" data-act="org-add" data-parent="">${ICON.plus} Добавить цех</button>` : `<button class="btn primary" data-act="dict-edit" data-id="">${ICON.plus} Добавить запись</button>`) : ''}</div>
+  ${isAdmin() ? '' : '<div class="note">Справочники ведёт администратор. У вас доступ только на просмотр.</div>'}
+  ${body}</section></div>`;
+}
+function orgTree(parent) {
+  return db.org.filter(o => o.parent === parent).map(o => {
+    const lvl = orgChain(o.id).length;
+    return `<li><div class="node${o.active === false ? ' off' : ''}"><span class="nm">${esc(o.name)}</span><span class="lvl">${LEVEL_NAME[lvl - 1]}, код ${esc(o.code || '—')}${o.active === false ? ', недействующий' : ''}</span>
+      ${isAdmin() ? `<span class="acts">${lvl < 3 && o.active !== false ? `<button class="btn small" data-act="org-add" data-parent="${o.id}">${ICON.plus} ${lvl === 1 ? 'Участок' : 'Бригада'}</button>` : ''}<button class="btn small" data-act="org-edit" data-id="${o.id}">Изменить</button><button class="btn small" data-act="org-toggle" data-id="${o.id}">${o.active === false ? 'Восстановить' : 'Сделать недействующим'}</button></span>` : ''}</div>
+      ${db.org.some(x => x.parent === o.id) ? `<ul>${orgTree(o.id)}</ul>` : ''}</li>`;
+  }).join('');
+}
+function dictEdit(id) {
+  const d = DICTS[S.dict], x = id ? byId(d.list(), id) : {};
+  openModal({ title: id ? 'Изменить запись' : 'Новая запись', ok: id ? 'Сохранить изменения' : 'Добавить запись',
+    body: `<div class="form-grid">${d.fields.map(([k, l, req, t]) => t === 'org' ? cascadeField(x[k] || '', l) : fld(k, l, { value: x[k] || '', req, wide: k === 'name' && S.dict === 'institutions' })).join('')}</div>`,
+    onOk: root => {
+      const v = readFields(root), errs = requireFields(v, d.fields.filter(f => f[2]).map(f => f[0]));
+      if (d.fields.some(f => f[3] === 'org') && !v.orgId) errs.orgId = 'Выберите подразделение';
+      if (v.name && d.list().some(y => y !== x && y.name?.toLowerCase() === v.name.toLowerCase())) errs.name = 'Такая запись уже есть';
+      if (!markErrors(root, errs)) return false;
+      const vals = {}; d.fields.forEach(([k]) => vals[k] = v[k] ?? '');
+      if (id) { const ch = applyChanges(x, vals, Object.fromEntries(d.fields.map(f => [f[0], f[1]]))); if (ch.length) log(null, `Справочник «${d.title}»`, 'Изменение', ch.join('; ')); }
+      else { const n = { id: nid('D'), ...vals, active: true }; if (S.dict === 'professions') db.positions.push({ id: 'pos-' + n.id, name: n.name, active: true }); d.list().push(n); log(null, `Справочник «${d.title}»`, 'Создание', vals.name || vals.fio); }
+      toast(id ? 'Изменения сохранены' : 'Запись добавлена'); renderMain();
+    } });
+}
+function orgEdit(id, parent) {
+  const o = id ? byId(db.org, id) : { parent: parent || null };
+  const lvl = parent ? orgChain(parent).length + 1 : id ? orgChain(id).length : 1;
+  openModal({ title: id ? 'Изменить подразделение' : `Новый элемент: ${LEVEL_NAME[lvl - 1].toLowerCase()}`, ok: id ? 'Сохранить изменения' : 'Добавить',
+    body: `${parent ? `<p>Входит в: ${esc(orgPath(parent))}</p>` : ''}<div class="form-grid">${fld('name', 'Наименование', { value: o.name || '', req: 1, wide: 1 })}${fld('code', 'Код', { value: o.code || '' })}</div>`,
+    onOk: root => {
+      const v = readFields(root); if (!markErrors(root, requireFields(v, ['name']))) return false;
+      if (id) { const ch = applyChanges(o, v, { name: 'Наименование', code: 'Код' }); if (ch.length) log(null, 'Структура предприятия', 'Изменение', ch.join('; ')); }
+      else { db.org.push({ id: nid('O'), name: v.name, code: v.code, parent: parent || null, active: true }); log(null, 'Структура предприятия', 'Создание', [parent ? orgPath(parent) : '', v.name].filter(Boolean).join(' / ')); }
+      toast(id ? 'Изменения сохранены' : 'Подразделение добавлено'); renderMain();
+    } });
+}
+
+/* ===== Отчёты ===== */
+const REPORTS = [
+  ['Журналы', [['journal', 'Журнал студентов на обучении'], ['moves', 'Журнал перемещений'], ['card', 'Индивидуальная карточка']]],
+  ['Аналитика', [['employment', 'Трудоустройство выпускников'], ['retention', 'Удержание выпускников'], ['grades', 'Оценки по учебным заведениям'], ['flow', 'Движение контингента']]]
+];
+const R_TITLE = Object.fromEntries(REPORTS.flatMap(g => g[1]));
+function filterDesc(f) {
+  const p = [];
+  if (f.q) p.push(`поиск «${f.q}»`);
+  if (f.year) p.push(`год набора ${f.year}`);
+  if (f.gyear) p.push(`год выпуска ${f.gyear}`);
+  if (f.inst) p.push(nameOf(db.institutions, f.inst));
+  if (f.prof) p.push(nameOf(db.professions, f.prof));
+  if (f.shop) p.push(nameOf(db.org, f.shop));
+  if (f.mentor) p.push(`наставник ${byId(db.mentors, f.mentor)?.fio}`);
+  if (f.rank) p.push(`разряд ${f.rank}`);
+  if (f.status) p.push(`статус «${f.status === 'work' ? 'Работает' : f.status === 'fired' ? 'Уволен' : f.status}»`);
+  if (f.from || f.to) p.push(`период ${f.from ? fmt(f.from) : '…'} – ${f.to ? fmt(f.to) : '…'}`);
+  return p.join('; ');
+}
+const metaLines = desc => [`Фильтры: ${desc || 'не заданы'}`, `Сформирован: ${fmt(TODAY)} ${hhmm()}, ${ROLES[S.role].user}`];
+const numOrEmpty = v => v === '' || v == null ? '' : Number(v);
+const pct = (a, b) => b ? { pct: a / b, label: `${Math.round(a / b * 100)} % (${a} из ${b})` } : null;
+const total = arr => { arr.total = true; return arr; };
+
+function rptJournal(f) {
+  const rows = studentRows({ ...f, sort: 'fio', dir: 1 });
+  const cols = [{ h: '№', w: 5 }, { h: 'ФИО', w: 30 }, { h: 'Дата рождения', w: 12 }, { h: 'Учебное заведение', w: 30 }, { h: 'Группа', w: 9 }, { h: 'Курс', w: 6 }, { h: 'Профессия', w: 26 },
+    { h: '№ договора', w: 13 }, { h: 'Дата договора', w: 12 }, { h: 'Место практики', w: 40 }, { h: 'Наставник', w: 28 },
+    ...[1, 2, 3, 4].map(k => ({ h: `Экзамен ${k} сем.`, w: 15 })), { h: 'Средний балл', w: 9 }, { h: 'Итоговая оценка', w: 9 }, { h: 'Оценка наставника', w: 10 },
+    ...(f.chr ? [{ h: 'Характеристика наставника', w: 50 }] : []), { h: '№ диплома', w: 17 }, { h: 'Дата выдачи', w: 12 }, { h: 'Квалификация', w: 28 }, { h: 'С отличием', w: 9 }, { h: 'Статус', w: 28 }];
+  const data = rows.map((p, i) => [i + 1, fio(p), fmt(p.birth), instName(p, true), p.contract.group, numOrEmpty(p.contract.course), profName(p), p.contract.num, fmt(p.contract.date),
+    orgPath(p.placement.orgId), mentorName(p), ...p.exams.map(e => e.grade ? `${e.grade} (${fmt(e.fact)})` : ''), avgNum(p), numOrEmpty(p.final.grade), numOrEmpty(p.final.mentorGrade),
+    ...(f.chr ? [p.final.mentorText] : []), p.diploma.num, fmt(p.diploma.date), p.diploma.qual, p.diploma.num ? (p.diploma.honors ? 'да' : 'нет') : '', statusText(p)]);
+  return { title: 'Журнал студентов, проходящих обучение', meta: metaLines(filterDesc(f)), sections: [{ columns: cols, rows: data }], count: rows.length };
+}
+function rptMoves(f) {
+  const q = (f.q || '').trim().toLowerCase();
+  const people = employeeRows({ ...f, shop: f.mode === 'current' ? f.shop : '', prof: f.mode === 'current' ? f.prof : '', sort: 'fio', dir: 1 }).filter(p => !q || fio(p).toLowerCase().includes(q));
+  if (f.mode === 'current') {
+    const cols = [{ h: '№', w: 5 }, { h: 'ФИО', w: 30 }, { h: 'Таб. №', w: 9 }, { h: 'Дата приёма', w: 12 }, { h: 'Цех', w: 30 }, { h: 'Участок', w: 30 }, { h: 'Бригада', w: 12 }, { h: 'Должность', w: 26 }, { h: 'Профессия', w: 26 }, { h: 'Разряд', w: 7 }, { h: 'Последнее перемещение', w: 14 }, { h: 'Статус', w: 12 }];
+    const rows = people.map((p, i) => { const m = lastMove(p); return [i + 1, fio(p), p.tab, fmt(hireMove(p).date), ...orgLevels(m.orgId), nameOf(db.positions, m.posId), nameOf(db.professions, m.profId), Number(m.rank), fmt(m.date), p.status === ST.FIRED ? 'Уволен' : 'Работает']; });
+    return { title: 'Журнал перемещений: текущее положение работников', meta: metaLines(filterDesc(f)), sections: [{ columns: cols, rows }], count: rows.length };
+  }
+  const cols = [{ h: '№', w: 5 }, { h: 'ФИО', w: 30 }, { h: 'Таб. №', w: 9 }, { h: 'Дата приёма', w: 12 }, { h: 'Вид события', w: 18 }, { h: 'Дата события', w: 12 }, { h: 'Цех', w: 30 }, { h: 'Участок', w: 30 }, { h: 'Бригада', w: 12 },
+    { h: 'Должность', w: 26 }, { h: 'Профессия', w: 26 }, { h: 'Разряд', w: 7 }, { h: '№ приказа', w: 10 }, { h: 'Дата приказа', w: 12 }, { h: 'Причина увольнения', w: 24 }, { h: 'Источник', w: 10 }];
+  const ev = people.flatMap(p => p.moves.map(m => ({ p, m }))).filter(({ m }) => (!f.from || m.date >= f.from) && (!f.to || m.date <= f.to) && (!f.shop || workshopOf(m.orgId) === f.shop) && (!f.prof || m.profId === f.prof));
+  const rows = ev.map(({ p, m }, i) => [i + 1, fio(p), p.tab, fmt(firstHire(p).date), m.type, fmt(m.date), ...orgLevels(m.orgId), nameOf(db.positions, m.posId), nameOf(db.professions, m.profId), Number(m.rank), m.order, fmt(m.orderDate), nameOf(db.reasons, m.reasonId), m.source]);
+  return { title: 'Журнал перемещений работников-выпускников', meta: metaLines(filterDesc(f)), sections: [{ columns: cols, rows }], count: rows.length };
+}
+function rptCard(id) {
+  const p = byId(db.persons, id); if (!p) return null;
+  const kv = [{ h: 'Показатель', w: 34 }, { h: 'Значение', w: 60 }];
+  const c = p.contract;
+  return { title: `Индивидуальная карточка: ${fio(p)}`, meta: metaLines(''), count: 1, sections: [
+    { title: 'Личные данные', columns: kv, rows: [['ФИО', fio(p)], ['Дата рождения', fmt(p.birth)], ['Табельный номер', p.tab], ['Телефон', p.phone], ['E-mail', p.email], ['Статус', statusText(p)]] },
+    { title: 'Договор и практика', columns: kv, rows: [['Договор', `№ ${c.num} от ${fmt(c.date)}`], ['Учебное заведение', instName(p, true)], ['Группа, курс', `${c.group}, ${c.course} курс`], ['Профессия', profName(p)], ['Срок обучения', `${fmt(c.start)} – ${fmt(c.end)}`], ['Место практики', orgPath(p.placement.orgId)], ['Наставник', mentorName(p)]] },
+    { title: 'Экзамены', columns: [{ h: 'Семестр', w: 34 }, { h: 'Плановая дата', w: 14 }, { h: 'Дата экзамена', w: 14 }, { h: 'Оценка', w: 9 }, { h: 'Комментарий', w: 30 }], rows: p.exams.map(e => [`${e.sem}-й`, fmt(e.plan), fmt(e.fact), numOrEmpty(e.grade), e.comment]) },
+    { title: 'Итоги и диплом', columns: kv, rows: [['Средний балл за экзамены', avgNum(p)], ['Итоговая оценка за 2 года', numOrEmpty(p.final.grade)], ['Оценка наставника', numOrEmpty(p.final.mentorGrade)], ['Характеристика наставника', p.final.mentorText], ['Диплом', p.diploma.num ? `№ ${p.diploma.num} от ${fmt(p.diploma.date)}${p.diploma.honors ? ', с отличием' : ''}` : ''], ['Квалификация', p.diploma.qual]] },
+    ...(p.moves.length ? [{ title: 'Трудовая деятельность', columns: [{ h: 'Дата', w: 34 }, { h: 'Событие', w: 18 }, { h: 'Подразделение', w: 50 }, { h: 'Должность', w: 26 }, { h: 'Разряд', w: 8 }, { h: 'Приказ', w: 18 }],
+      rows: p.moves.map(m => [fmt(m.date), m.type, orgPath(m.orgId), nameOf(db.positions, m.posId), Number(m.rank), `№ ${m.order} от ${fmt(m.orderDate)}`]) }] : [])
+  ] };
+}
+const graduates = () => db.persons.filter(p => [ST.DONE, ST.NOTH, ST.HIRED, ST.FIRED].includes(p.status));
+function rptEmployment(f) {
+  const dim = { year: ['Год выпуска', p => String(gradYear(p))], inst: ['Учебное заведение', p => instName(p)], prof: ['Профессия', profName] }[f.dim];
+  const groups = {};
+  graduates().forEach(p => { const k = dim[1](p); (groups[k] = groups[k] || []).push(p); });
+  const keys = Object.keys(groups).sort((a, b) => f.dim === 'year' ? b.localeCompare(a) : a.localeCompare(b, 'ru'));
+  const line = (k, list) => { const h = list.filter(p => p.moves.some(m => m.type === 'Приём')).length; return [k, list.length, h, list.length - h, pct(h, list.length)]; };
+  const rows = keys.map(k => line(k, groups[k])); const all = graduates(); if (keys.length) rows.push(total(line('Итого', all)));
+  return { title: 'Трудоустройство выпускников', meta: metaLines(`разрез: ${dim[0].toLowerCase()}`), count: rows.length,
+    sections: [{ columns: [{ h: dim[0], w: 30 }, { h: 'Выпускников', w: 13 }, { h: 'Принято на работу', w: 13 }, { h: 'Не принято', w: 12 }, { h: 'Доля принятых', w: 14, type: 'pct' }], rows }] };
+}
+function rptRetention(f) {
+  const N = +f.n;
+  const hires = db.persons.filter(p => firstHire(p));
+  const by = {}; hires.forEach(p => { const y = yearOf(firstHire(p).date); (by[y] = by[y] || []).push(p); });
+  const dismissDate = p => p.moves.find(m => m.type === 'Увольнение')?.date || null;
+  const calc = (list, k) => { const el = list.filter(p => addMonths(firstHire(p).date, 12 * k) <= TODAY); const kept = el.filter(p => { const d = dismissDate(p); return !d || d >= addMonths(firstHire(p).date, 12 * k); }); return pct(kept.length, el.length); };
+  const ys = Object.keys(by).sort((a, b) => b - a);
+  const rows = ys.map(y => [y, by[y].length, by[y].filter(p => p.status === ST.HIRED).length, ...Array.from({ length: N }, (_, i) => calc(by[y], i + 1))]);
+  if (ys.length) rows.push(total(['Все годы', hires.length, hires.filter(p => p.status === ST.HIRED).length, ...Array.from({ length: N }, (_, i) => calc(hires, i + 1))]));
+  const fired = hires.filter(p => p.status === ST.FIRED);
+  const rc = {}; fired.forEach(p => { const r = nameOf(db.reasons, p.moves.find(m => m.type === 'Увольнение').reasonId); rc[r] = (rc[r] || 0) + 1; });
+  const rrows = Object.entries(rc).sort((a, b) => b[1] - a[1]).map(([r, n]) => [r, n, pct(n, fired.length)]);
+  return { title: 'Удержание выпускников', meta: metaLines(`горизонт ${N} ${plural(N, 'год', 'года', 'лет')}`), count: rows.length, sections: [
+    { title: 'Доля работающих через N лет после приёма', columns: [{ h: 'Год приёма', w: 14 }, { h: 'Принято', w: 10 }, { h: 'Работают сейчас', w: 12 }, ...Array.from({ length: N }, (_, i) => ({ h: `Через ${i + 1} ${plural(i + 1, 'год', 'года', 'лет')}`, w: 14, type: 'pct' }))], rows },
+    { title: 'Причины увольнения', columns: [{ h: 'Причина', w: 30 }, { h: 'Уволено', w: 10 }, { h: 'Доля', w: 14, type: 'pct' }], rows: rrows }] };
+}
+function rptGrades(f) {
+  const list = db.persons.filter(p => !f.year || String(startYear(p)) === f.year);
+  const avg = a => a.length ? Math.round(a.reduce((x, y) => x + y, 0) / a.length * 100) / 100 : '';
+  const line = (name, ps) => { const ex = ps.flatMap(p => p.exams.filter(e => e.grade).map(e => +e.grade)); const dip = ps.filter(p => p.diploma.num);
+    return [name, ps.length, avg(ex), avg(ps.filter(p => p.final.grade).map(p => +p.final.grade)), avg(ps.filter(p => p.final.mentorGrade).map(p => +p.final.mentorGrade)), dip.length, pct(dip.filter(p => p.diploma.honors).length, dip.length)]; };
+  const rows = db.institutions.map(i => line(i.short, list.filter(p => p.contract.instId === i.id))).filter(r => r[1]);
+  if (rows.length) rows.push(total(line('Все учебные заведения', list)));
+  return { title: 'Оценки по учебным заведениям', meta: metaLines(f.year ? `год набора ${f.year}` : ''), count: rows.length, sections: [{ columns: [{ h: 'Учебное заведение', w: 30 }, { h: 'Студентов', w: 10 }, { h: 'Средний балл за экзамены', w: 14 }, { h: 'Средняя итоговая оценка', w: 14 }, { h: 'Средняя оценка наставника', w: 14 }, { h: 'Дипломов', w: 10 }, { h: 'С отличием', w: 14, type: 'pct' }], rows }] };
+}
+function rptFlow() {
+  const ys = [...new Set(db.persons.map(startYear))].sort((a, b) => b - a);
+  const line = (name, ps) => { const t = ps.filter(p => p.status === ST.TERM); return [name, ps.length, ps.filter(p => p.status === ST.TRAIN).length, ps.filter(p => [ST.DONE, ST.NOTH, ST.HIRED, ST.FIRED].includes(p.status)).length, t.length, t.filter(p => p.contract.termBasis === 'Отчисление').length, t.filter(p => p.contract.termBasis !== 'Отчисление').length]; };
+  const rows = ys.map(y => line(String(y), db.persons.filter(p => startYear(p) === y))); rows.push(total(line('Итого', db.persons)));
+  return { title: 'Движение контингента', meta: metaLines(''), count: rows.length, sections: [{ columns: [{ h: 'Год набора', w: 12 }, { h: 'Принято на обучение', w: 14 }, { h: 'На обучении', w: 12 }, { h: 'Завершили обучение', w: 14 }, { h: 'Расторгнуто', w: 12 }, { h: 'Отчисление', w: 12 }, { h: 'По собственному желанию', w: 16 }], rows }] };
+}
+function buildReport() {
+  const r = S.report;
+  if (r === 'journal') return rptJournal(S.f.rj);
+  if (r === 'moves') return rptMoves(S.f.rm);
+  if (r === 'card') return rptCard(S.f.rc.id);
+  if (r === 'employment') return rptEmployment(S.f.ra);
+  if (r === 'retention') return rptRetention(S.f.rr);
+  if (r === 'grades') return rptGrades(S.f.rg);
+  return rptFlow();
+}
+function reportFilters() {
+  const r = S.report;
+  if (r === 'journal') return `${fSearch('rj.q', 'ФИО')}${fSel('rj.year', 'Год набора', yearsList())}${fSel('rj.inst', 'Учебное заведение', db.institutions.map(i => ({ id: i.id, name: i.short })))}${fSel('rj.prof', 'Профессия', db.professions)}${fSel('rj.shop', 'Цех практики', shops())}${fSel('rj.mentor', 'Наставник', mentorList())}${fSel('rj.status', 'Статус', statusList(Object.values(ST)))}<label class="f check"><input type="checkbox" data-f="rj.chr"${S.f.rj.chr ? ' checked' : ''}> Включить характеристику наставника</label>`;
+  if (r === 'moves') return `<label class="f"><span>Вид журнала</span><select data-f="rm.mode">${options([{ id: 'full', name: 'Все события' }, { id: 'current', name: 'Текущее положение' }], S.f.rm.mode, { empty: null })}</select></label>${fSearch('rm.q', 'ФИО')}${S.f.rm.mode === 'full' ? fDate('rm.from', 'Период с') + fDate('rm.to', 'по') : ''}${fSel('rm.shop', 'Цех', shops())}${fSel('rm.prof', 'Профессия', db.professions)}`;
+  if (r === 'card') return `<label class="f search"><span>Человек</span><select data-f="rc.id">${options([...db.persons].sort((a, b) => fio(a).localeCompare(fio(b), 'ru')).map(p => ({ id: p.id, name: `${fio(p)}, ${fmt(p.birth)}` })), S.f.rc.id, { empty: '— выберите —' })}</select></label>`;
+  if (r === 'employment') return `<label class="f"><span>Разрез</span><select data-f="ra.dim">${options([{ id: 'year', name: 'По годам выпуска' }, { id: 'inst', name: 'По учебным заведениям' }, { id: 'prof', name: 'По профессиям' }], S.f.ra.dim, { empty: null })}</select></label>`;
+  if (r === 'retention') return `<label class="f"><span>Горизонт, лет (N)</span><select data-f="rr.n">${options([1, 2, 3, 4, 5].map(n => ({ id: String(n), name: String(n) })), S.f.rr.n, { empty: null })}</select></label>`;
+  if (r === 'grades') return fSel('rg.year', 'Год набора', yearsList());
+  return '';
+}
+function viewReports() {
+  const side = REPORTS.map(([g, list]) => `<div class="grp">${g}</div>${list.map(([k, t]) => `<button data-act="report" data-k="${k}" aria-current="${k === S.report}">${t}</button>`).join('')}`).join('');
+  const flt = reportFilters();
+  return `<div class="page-head"><div><h1>Отчёты</h1><p class="sub">Просмотрите отчёт на экране и выгрузите его в Excel</p></div></div>
+  <div class="split"><nav class="panel side no-print" aria-label="Отчёты">${side}</nav>
+  <section class="panel print-area"><div class="p-head"><h2>${R_TITLE[S.report]}</h2><div class="actions no-print">
+    ${S.report === 'card' ? `<button class="btn" data-act="print">${ICON.print} Печать</button>` : ''}<button class="btn primary" data-act="export-report">${ICON.dl} Выгрузить в Excel</button></div></div>
+  ${flt ? `<div class="filters no-print">${flt}</div>` : ''}<div id="rbody"></div></section></div>`;
+}
+function cellView(v, c) {
+  if (c?.type === 'pct') return v == null ? '<span class="sub">—</span>' : `<span class="bar"><span class="tr"><i style="width:${Math.round(v.pct * 100)}%"></i></span><span>${esc(v.label)}</span></span>`;
+  return esc(nf(v));
+}
+function renderReportBody() {
+  const host = $('#rbody'); if (!host) return;
+  const r = buildReport();
+  if (!r) { host.innerHTML = '<div class="empty">Выберите человека, чтобы сформировать карточку.</div>'; return; }
+  const limit = 300;
+  host.innerHTML = `<div class="print-only" style="padding:0 14px"><p>${r.meta.map(esc).join('<br>')}</p></div>` +
+    (S.report === 'journal' || S.report === 'moves' ? `<div class="rcount">Строк в отчёте: ${r.count}${r.count > limit ? `. На экране первые ${limit}, в файле все` : ''}</div>` : '') +
+    r.sections.map(sec => `${sec.title ? `<h3 class="sec-t">${esc(sec.title)}</h3>` : ''}<div class="table-wrap"><table class="grid"><thead><tr>${sec.columns.map(c => `<th>${esc(c.h)}</th>`).join('')}</tr></thead><tbody>
+      ${sec.rows.length ? sec.rows.slice(0, limit).map(row => `<tr${row.total ? ' class="total"' : ''}>${row.map((v, i) => `<td${typeof v === 'number' ? ' class="num"' : ''}>${cellView(v, sec.columns[i])}</td>`).join('')}</tr>`).join('')
+        : `<tr><td colspan="${sec.columns.length}" class="empty">Нет данных по выбранным фильтрам. Измените фильтры.</td></tr>`}</tbody></table></div>`).join('');
+}
+const R_FILE = { journal: 'Журнал_обучения', moves: 'Журнал_перемещений', card: 'Карточка', employment: 'Трудоустройство', retention: 'Удержание', grades: 'Оценки_по_учебным_заведениям', flow: 'Движение_контингента' };
+
+/* ===== Настройки (администратор) ===== */
+function settingsModal() {
+  const s = db.settings;
+  openModal({ title: 'Настройки', wide: true, ok: 'Сохранить настройки', body: `
+    <h3>Напоминания</h3><div class="form-grid">
+      ${fld('examDays', 'Об экзамене за, дней', { type: 'number', value: s.examDays, req: 1, attrs: ' min="1" max="90"' })}
+      ${fld('contractDays', 'Об окончании договора за, дней', { type: 'number', value: s.contractDays, req: 1, attrs: ' min="1" max="180"' })}
+      ${fld('email', 'Ежедневная сводка на e-mail через корпоративный почтовый сервер', { type: 'checkbox', value: s.email, wide: 1 })}</div>
+    <h3 style="margin-top:18px">Обмен с 1С:ЗУП</h3><div class="form-grid">
+      ${fld('mode', 'Способ обмена', { type: 'select', opts: options([{ id: 'odata', name: 'REST-интерфейс 1С (OData)' }, { id: 'file', name: 'Файлы в сетевой папке' }], s.mode, { empty: null }) })}
+      ${fld('time', 'Время ежедневного обмена', { type: 'time', value: s.time })}
+      ${fld('odataUrl', 'Адрес OData', { value: s.odataUrl, wide: 1 })}${fld('folder', 'Сетевая папка обмена', { value: s.folder, wide: 1 })}</div>
+    <h3 style="margin-top:18px">Доступ по группам Active Directory</h3>
+    <div class="table-wrap"><table class="grid"><thead><tr><th>Роль</th><th>Группа AD</th></tr></thead><tbody><tr><td>Администратор</td><td>DualEdu_Admins</td></tr><tr><td>Специалист по обучению</td><td>DualEdu_Specialists</td></tr><tr><td>Просмотр</td><td>DualEdu_Viewers</td></tr></tbody></table></div>
+    <h3 style="margin-top:18px">Журнал обмена с 1С:ЗУП</h3>
+    <div class="table-wrap"><table class="grid"><thead><tr><th>Дата и время</th><th>Способ</th><th>Получено</th><th>Ожидают</th><th>Ошибки</th><th>Запустил</th></tr></thead><tbody>${db.exchange.slice(0, 10).map(x => `<tr><td>${fmt(x.ts.slice(0, 10))} ${x.ts.slice(11)}</td><td>${x.mode}</td><td class="num">${x.got}</td><td class="num">${x.pending}</td><td class="num">${x.errors}</td><td>${esc(x.user)}</td></tr>`).join('')}</tbody></table></div>
+    <h3 style="margin-top:18px">Журнал аудита (последние 40 записей)</h3>
+    <div class="table-wrap"><table class="grid"><thead><tr><th>Дата и время</th><th>Пользователь</th><th>Объект</th><th>Действие</th><th>Подробности</th></tr></thead><tbody>${db.audit.slice(0, 40).map(a => `<tr><td>${fmt(a.ts.slice(0, 10))} ${a.ts.slice(11)}</td><td>${esc(a.user)}</td><td>${a.personId ? esc(fio(byId(db.persons, a.personId))) + '<small>' + esc(a.entity) + '</small>' : esc(a.entity)}</td><td>${esc(a.action)}</td><td>${esc(a.details)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="hint">В рабочей версии подключение к AD и 1С:ЗУП выполняет сервер. В этой демонстрации обмен имитируется, а данные хранятся только до перезагрузки страницы.</div>`,
+    onOk: root => {
+      const v = readFields(root), errs = {};
+      if (!(+v.examDays >= 1)) errs.examDays = 'Укажите число дней'; if (!(+v.contractDays >= 1)) errs.contractDays = 'Укажите число дней';
+      if (!markErrors(root, errs)) return false;
+      const ch = applyChanges(s, { ...v, examDays: String(+v.examDays), contractDays: String(+v.contractDays) }, { examDays: 'Напоминание об экзамене, дней', contractDays: 'Напоминание об окончании договора, дней', email: 'E-mail-сводка', mode: 'Способ обмена', time: 'Время обмена', odataUrl: 'Адрес OData', folder: 'Сетевая папка' });
+      if (ch.length) log(null, 'Настройки', 'Изменение', ch.join('; '));
+      toast('Настройки сохранены'); renderAll();
+    } });
+}
+
+/* ===== События ===== */
+document.addEventListener('click', e => {
+  const bp = $('#bellPanel');
+  if (!bp.hidden && !e.target.closest('#bellPanel') && !e.target.closest('[data-act="bell"]')) bp.hidden = true;
+  const a = e.target.closest('[data-act]'); if (!a) return;
+  const act = a.dataset.act, p = S.open && byId(db.persons, S.open);
+  switch (act) {
+    case 'tab': S.tab = a.dataset.tab; renderMain(); renderHeader(); window.scrollTo(0, 0); break;
+    case 'sort': break;
+    case 'page': { const f = S.f[a.dataset.scope]; f.page = +a.dataset.p; renderTable(a.dataset.scope); break; }
+    case 'open': openCard(a.dataset.id, a.dataset.tab); break;
+    case 'close-card': S.open = null; renderDrawer(); break;
+    case 'card-tab': S.cardTab = a.dataset.k; renderDrawer(); break;
+    case 'save': saveSection(a.dataset.k, a.closest('[data-form]')); break;
+    case 'suggest-final': { const s = $('select[name="fgrade"]'); if (s) { s.value = a.dataset.v; toast('Оценка подставлена. Сохраните изменения.'); } break; }
+    case 'terminate': terminateModal(p); break;
+    case 'complete': completeModal(p); break;
+    case 'nothire': notHiredModal(p); break;
+    case 'move': moveModal(p, a.dataset.type); break;
+    case 'set-status': statusModal(p); break;
+    case 'add-student': addStudent(); break;
+    case 'export-students': exportReport(rptJournal({ ...S.f.students, chr: false }), 'Журнал_обучения'); break;
+    case 'export-moves': exportReport(rptMoves({ ...S.f.employees, mode: a.dataset.mode, from: '', to: '' }), a.dataset.mode === 'full' ? 'Журнал_перемещений' : 'Текущее_положение'); break;
+    case 'sync': sync1c(); break;
+    case 'c1-ok': confirm1c(a.dataset.id, true); break;
+    case 'c1-no': confirm1c(a.dataset.id, false); break;
+    case 'bell': bp.hidden = !bp.hidden; if (!bp.hidden) renderBell(); break;
+    case 'ev': { const r = reminders()[+a.dataset.i]; bp.hidden = true; if (!r) break; if (r.p) openCard(r.p.id, r.kind === 'contract' ? 'contract' : r.kind === 'final' ? 'exams' : 'exams'); else { S.tab = 'employees'; S.open = null; renderAll(); } break; }
+    case 'settings': settingsModal(); break;
+    case 'dict': S.dict = a.dataset.k; renderMain(); break;
+    case 'dict-edit': dictEdit(a.dataset.id); break;
+    case 'dict-toggle': { const x = byId(DICTS[S.dict].list(), a.dataset.id); x.active = x.active === false; log(null, `Справочник «${DICTS[S.dict].title}»`, x.active ? 'Восстановление' : 'Пометка недействующей', x.name || x.fio); toast(x.active ? 'Запись снова действует' : 'Запись помечена недействующей. В старых записях она по-прежнему отображается.'); renderMain(); break; }
+    case 'org-add': orgEdit('', a.dataset.parent); break;
+    case 'org-edit': orgEdit(a.dataset.id); break;
+    case 'org-toggle': { const o = byId(db.org, a.dataset.id); o.active = o.active === false; log(null, 'Структура предприятия', o.active ? 'Восстановление' : 'Пометка недействующим', orgPath(o.id)); toast(o.active ? 'Подразделение снова действует' : 'Подразделение помечено недействующим'); renderMain(); break; }
+    case 'report': S.report = a.dataset.k; renderMain(); break;
+    case 'export-report': { const r = buildReport(); if (!r) { toast('Сначала выберите человека'); break; } exportReport(r, R_FILE[S.report]); break; }
+    case 'print': if (!S.f.rc.id) toast('Сначала выберите человека'); else window.print(); break;
+    case 'modal-close': closeModal(); break;
+    case 'modal-bg': if (e.target === a) closeModal(); break;
+    case 'modal-ok': { const root = $('#modalHost .m-body'); if (modalCtx?.onOk(root) !== false) { if ($('#modalHost .m-body') === root) closeModal(); } break; }
+  }
+  const sh = e.target.closest('th[data-sort]');
+  if (sh) { const [sc, k] = sh.dataset.sort.split('.'); const f = S.f[sc]; if (f.sort === k) f.dir = -f.dir; else { f.sort = k; f.dir = 1; } f.page = 1; renderTable(sc); }
+});
+document.addEventListener('input', e => {
+  const t = e.target;
+  if (t.matches('[data-f]')) {
+    const [sc, k] = t.dataset.f.split('.');
+    S.f[sc][k] = t.type === 'checkbox' ? t.checked : t.value;
+    if ('page' in S.f[sc]) S.f[sc].page = 1;
+    if (sc === 'students' || sc === 'employees') renderTable(sc);
+    else if (sc === 'rm' && k === 'mode') renderMain();
+    else renderReportBody();
+  }
+});
+document.addEventListener('change', e => {
+  const t = e.target;
+  if (t.matches('select[data-cascade]')) {
+    const root = t.closest('[data-cascade-root]'), i = +t.dataset.cascade;
+    const id = t.value || (i > 0 ? root.querySelector(`[data-cascade="${i - 1}"]`).value : '');
+    root.innerHTML = cascadeHTML(id);
+    root.querySelector(`[data-cascade="${i}"]`)?.focus();
+    const form = root.closest('.m-body, .section'), ms = form?.querySelector('select[name="mentorId"]');
+    if (ms) ms.innerHTML = mentorOpts(readCascade(root), ms.value);
+  }
+  if (t.matches('#modalHost input[name="start"]')) { const end = $('#modalHost input[name="end"]'); if (end && !end.value && t.value) end.value = addDays(addMonths(t.value, 24), -1); }
+  if (t.id === 'roleSel') {
+    S.role = t.value; closeModal(); $('#bellPanel').hidden = true;
+    renderAll(); toast(`Роль: ${ROLES[S.role].name}`);
+  }
+});
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if ($('#modalHost').innerHTML) closeModal(); else if (!$('#bellPanel').hidden) $('#bellPanel').hidden = true; else if (S.open) { S.open = null; renderDrawer(); } }
+  if (e.key === 'Enter' && e.target.matches('tr[data-act="open"]')) openCard(e.target.dataset.id, e.target.dataset.tab);
+});
+
+renderAll();
+
+</script>
+</body>
+</html>
